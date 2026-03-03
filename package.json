@@ -1,0 +1,21 @@
+{
+  "name": "ts500-pmm-wasm",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build:wasm": "asc assembly/index.ts --target release --optimize --outFile public/wasm/pmm.wasm",
+    "dev": "npm run build:wasm && vite",
+    "build": "npm run build:wasm && tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@assemblyscript/loader": "^0.28.9",
+    "assemblyscript": "^0.28.9",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.1"
+  },
+  "dependencies": {
+    "plotly.js-dist-min": "^3.4.0"
+  }
+}
