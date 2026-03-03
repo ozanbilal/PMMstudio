@@ -569,7 +569,7 @@ h2 {
 }
 
 .controls-top-grid {
-  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
 }
 
 .grid {
@@ -582,6 +582,7 @@ label {
   gap: 6px;
   color: var(--muted);
   font-size: 0.9rem;
+  min-width: 0;
 }
 
 input,
@@ -599,6 +600,12 @@ textarea {
   background: var(--control-bg);
   color: var(--text);
   padding: 10px 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.controls-top-grid > label {
+  min-width: 0;
 }
 
 input:focus,
