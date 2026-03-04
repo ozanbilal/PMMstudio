@@ -4,10 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "build:wasm": "asc assembly/index.ts --target release --optimize --outFile public/wasm/pmm.wasm",
-    "dev": "npm run build:wasm && vite",
-    "build": "npm run build:wasm && tsc && vite build",
-    "preview": "vite preview"
+    "build:wasm": "node ./node_modules/assemblyscript/bin/asc.js assembly/index.ts --target release --optimize --outFile public/wasm/pmm.wasm",
+    "dev": "npm run build:wasm && node ./node_modules/vite/bin/vite.js",
+    "build": "npm run build:wasm && node ./node_modules/typescript/bin/tsc && node ./node_modules/vite/bin/vite.js build",
+    "preview": "node ./node_modules/vite/bin/vite.js preview"
   },
   "devDependencies": {
     "@assemblyscript/loader": "^0.28.9",
