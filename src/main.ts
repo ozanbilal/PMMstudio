@@ -60,6 +60,21 @@ interface WasmExports {
   getPointP: (index: number) => number;
   getPointMx: (index: number) => number;
   getPointMy: (index: number) => number;
+  buildMomentCurvature: (
+    pKn: number,
+    nx: number,
+    ny: number,
+    nSteps: number,
+    fck: number,
+    fyk: number,
+    gammaC: number,
+    gammaS: number,
+    esMpa: number,
+    barDia: number
+  ) => number;
+  getMcCount: () => number;
+  getMcPhi: (index: number) => number;
+  getMcMoment: (index: number) => number;
 }
 
 interface LoadCase {
@@ -548,6 +563,39 @@ L3,650,90,45</textarea>
           </div>
         </div>
       </details>
+
+      <details class="panel panel-full accordion" id="mc-accordion">
+        <summary class="accordion-head">
+          <h2 data-i18n="headingMc">Moment – Eğrilik Analizi</h2>
+          <span class="accordion-hint" data-i18n="accordionHint">Aç / Kapat</span>
+        </summary>
+        <div class="accordion-body">
+          <p class="mc-intro" data-i18n="mcIntro">
+            Verilen eksenel yük altında tek eksenli eğilme için M–φ eğrisi hesaplar.
+            Önce PMM analizi çalıştırılmış olmalıdır.
+          </p>
+          <div class="mc-controls">
+            <label>
+              <span data-i18n="labelMcP">Eksenel yük P (kN)</span>
+              <input id="mc-p" type="number" value="1200" step="50" />
+            </label>
+            <label>
+              <span data-i18n="labelMcAngle">Eğilme açısı (°)</span>
+              <input id="mc-angle" type="number" value="0" min="0" max="359" step="5" />
+            </label>
+            <label>
+              <span data-i18n="labelMcSteps">Adım sayısı</span>
+              <input id="mc-steps" type="number" value="80" min="20" max="400" step="10" />
+            </label>
+            <button id="mc-run-btn" class="run-btn" data-i18n="btnMcRun">M–φ Hesapla</button>
+          </div>
+          <p class="mc-angle-hint" data-i18n="mcAngleHint">
+            0° = Mx eğilmesi (yatay nötr eksen) · 90° = My eğilmesi (düşey nötr eksen)
+          </p>
+          <div id="plot-mc" class="plot-mc"></div>
+          <div id="mc-stats" class="mc-stats hidden"></div>
+        </div>
+      </details>
     </main>
   </div>
 `;
@@ -618,7 +666,18 @@ const refs = {
   fieldBars: must<HTMLElement>("field-bars"),
   fieldExpectedFckFactor: must<HTMLElement>("field-expected-fck-factor"),
   fieldExpectedFykFactor: must<HTMLElement>("field-expected-fyk-factor"),
+  mcP: must<HTMLInputElement>("mc-p"),
+  mcAngle: must<HTMLInputElement>("mc-angle"),
+  mcSteps: must<HTMLInputElement>("mc-steps"),
+  mcRunBtn: must<HTMLButtonElement>("mc-run-btn"),
+  plotMc: must<HTMLDivElement>("plot-mc"),
+  mcStats: must<HTMLDivElement>("mc-stats"),
 };
+
+interface McData {
+  phi: number[];
+  moment: number[];
+}
 
 const state: {
   wasm: WasmExports | null;
@@ -634,6 +693,7 @@ const state: {
   theme: ThemeMode;
   lastInput: AppInput | null;
   statusLogEntries: Array<{ text: string; level: StatusLevel }>;
+  mcData: McData | null;
 } = {
   wasm: null,
   results: [],
@@ -648,6 +708,7 @@ const state: {
   theme: "dark",
   lastInput: null,
   statusLogEntries: [],
+  mcData: null,
 };
 
 const I18N = {
@@ -789,6 +850,21 @@ const I18N = {
     statusSurfaceExportEmpty: "Dışa aktarım için PMM yüzeyi bulunamadı.",
     statusReportExported: "Word raporu oluşturuldu.",
     statusReportExportEmpty: "Rapor için önce PMM analizi çalıştırın.",
+    headingMc: "Moment – Eğrilik Analizi",
+    mcIntro: "Verilen eksenel yük altında tek eksenli eğilme için M–φ eğrisi hesaplar. Önce PMM analizi çalıştırılmış olmalıdır.",
+    labelMcP: "Eksenel yük P (kN)",
+    labelMcAngle: "Eğilme açısı (°)",
+    labelMcSteps: "Adım sayısı",
+    btnMcRun: "M–φ Hesapla",
+    mcAngleHint: "0° = Mx eğilmesi (yatay nötr eksen) · 90° = My eğilmesi (düşey nötr eksen)",
+    statusMcRunning: "M–φ eğrisi hesaplanıyor...",
+    statusMcDone: "M–φ analizi tamamlandı.",
+    statusMcNoPmm: "Önce PMM analizi çalıştırın.",
+    statusMcNoPoints: "Geçerli M–φ noktası üretilemedi. P değerini ve kesit parametrelerini kontrol edin.",
+    mcStatsMu: "Mu",
+    mcStatsPhiU: "φu",
+    mcStatsPhiY: "φy (bilineer)",
+    mcStatsDuctility: "μφ = φu/φy",
   },
   en: {
     kicker: "TS500 + WebAssembly",
@@ -928,6 +1004,21 @@ const I18N = {
     statusSurfaceExportEmpty: "No PMM surface found for export.",
     statusReportExported: "Word report generated.",
     statusReportExportEmpty: "Run PMM analysis before exporting report.",
+    headingMc: "Moment – Curvature Analysis",
+    mcIntro: "Computes the M–φ curve for uniaxial bending under a given axial load. Run PMM analysis first.",
+    labelMcP: "Axial load P (kN)",
+    labelMcAngle: "Bending angle (°)",
+    labelMcSteps: "Steps",
+    btnMcRun: "Compute M–φ",
+    mcAngleHint: "0° = Mx bending (horizontal NA) · 90° = My bending (vertical NA)",
+    statusMcRunning: "Computing M–φ curve...",
+    statusMcDone: "M–φ analysis complete.",
+    statusMcNoPmm: "Run PMM analysis first.",
+    statusMcNoPoints: "No valid M–φ points produced. Check P value and section parameters.",
+    mcStatsMu: "Mu",
+    mcStatsPhiU: "φu",
+    mcStatsPhiY: "φy (bilinear)",
+    mcStatsDuctility: "μφ = φu/φy",
   },
 } as const;
 
@@ -1040,6 +1131,7 @@ function applyTheme(theme: ThemeMode): void {
   document.body.classList.toggle("theme-dark", theme === "dark");
   renderPlot(state.surface, state.results);
   renderPlot3d(state.surface, state.results);
+  if (state.mcData) renderMcPlot(state.mcData);
 }
 
 init().catch((error) => {
@@ -1152,6 +1244,7 @@ async function init(): Promise<void> {
   refs.exportResults.addEventListener("click", exportResultsCsv);
   refs.exportSurface.addEventListener("click", exportSurfaceCsv);
   refs.exportReport.addEventListener("click", exportWordReport);
+  refs.mcRunBtn.addEventListener("click", () => runMomentCurvature().catch(showError));
 
   setStatus(tx("statusWasmLoading"), "info");
   state.wasm = await loadWasm();
@@ -3026,6 +3119,222 @@ async function writeClipboardText(text: string): Promise<void> {
   const ok = document.execCommand("copy");
   ta.remove();
   if (!ok) throw new Error(state.lang === "en" ? "Copy failed." : "Kopyalama başarısız.");
+}
+
+// ---------------------------------------------------------------------------
+// Moment–Curvature Analysis
+// ---------------------------------------------------------------------------
+
+async function runMomentCurvature(): Promise<void> {
+  const wasm = state.wasm;
+  if (!wasm) throw new Error(tx("statusMcNoPmm"));
+  if (state.surface.length === 0) throw new Error(tx("statusMcNoPmm"));
+  if (!state.lastInput) throw new Error(tx("statusMcNoPmm"));
+
+  setStatus(tx("statusMcRunning"), "info");
+
+  const input = state.lastInput;
+  const pSignFactor = readCurrentPSignFactor();
+  const pKnRaw = Number(refs.mcP.value.trim().replace(",", "."));
+  if (!Number.isFinite(pKnRaw)) throw new Error(tx("statusMcNoPmm"));
+  // Convert user P to WASM convention (positive = compression)
+  const pKn = pKnRaw * pSignFactor;
+
+  const angleDeg = Number(refs.mcAngle.value.trim().replace(",", ".")) || 0;
+  const angleRad = (angleDeg * Math.PI) / 180;
+  // angle=0° → Mx bending: nx=sin(0)=0, ny=cos(0)=1 → horizontal NA
+  // angle=90° → My bending: nx=sin(90°)=1, ny=cos(90°)=0 → vertical NA
+  const nx = Math.sin(angleRad);
+  const ny = Math.cos(angleRad);
+
+  const nSteps = Math.max(20, Math.min(400, Math.round(Number(refs.mcSteps.value) || 80)));
+
+  const strengths = resolveDesignStrengths(input);
+  const barDiaM = input.barDiaMm / 1000.0;
+
+  const count = wasm.buildMomentCurvature(
+    pKn,
+    nx,
+    ny,
+    nSteps,
+    strengths.fckPmm,
+    strengths.fykPmm,
+    input.gammaC,
+    input.gammaS,
+    input.es,
+    barDiaM
+  );
+
+  if (count === 0) throw new Error(tx("statusMcNoPoints"));
+
+  const phi: number[] = [];
+  const moment: number[] = [];
+  for (let i = 0; i < count; i++) {
+    phi.push(wasm.getMcPhi(i));
+    moment.push(wasm.getMcMoment(i));
+  }
+
+  state.mcData = { phi, moment };
+  renderMcPlot(state.mcData);
+  setStatus(tx("statusMcDone"), "info");
+}
+
+interface McKeyPoints {
+  mu: number;
+  phiU: number;
+  phiY: number;
+  ductility: number;
+}
+
+/**
+ * Bilinear idealisation (equal-area / Park method):
+ * φy is the yield curvature such that the area under the bilinear curve
+ * (0→φy at slope Mu/φy, then horizontal to φu) equals the area under
+ * the actual M–φ curve from 0 to φu.
+ *
+ * Bilinear area = Mu*(φu - 0.5*φy)
+ * Solve: φy = 2*(φu - actual_area/Mu)
+ */
+function computeMcKeyPoints(phi: number[], moment: number[]): McKeyPoints {
+  const n = phi.length;
+  // Peak moment
+  let mu = 0;
+  let muIdx = 0;
+  for (let i = 0; i < n; i++) {
+    if (moment[i] > mu) { mu = moment[i]; muIdx = i; }
+  }
+  const phiU = phi[muIdx];
+
+  // Trapezoidal area from 0 to φu
+  let area = 0;
+  for (let i = 1; i <= muIdx; i++) {
+    area += 0.5 * (moment[i - 1] + moment[i]) * (phi[i] - phi[i - 1]);
+  }
+
+  // Bilinear yield curvature
+  let phiY = mu > 0 ? 2 * (phiU - area / mu) : phiU;
+  if (phiY <= 0 || phiY > phiU) phiY = phiU * 0.2; // fallback
+  const ductility = phiU / phiY;
+
+  return { mu, phiU, phiY, ductility };
+}
+
+function renderMcPlot(data: McData): void {
+  const host = refs.plotMc;
+  const statsDiv = refs.mcStats;
+  const { phi, moment } = data;
+  if (phi.length === 0) { host.innerHTML = ""; return; }
+
+  const pSignFactor = readCurrentPSignFactor();
+  // Format phi in units of 1/m (no conversion needed — already rad/m)
+  const keyPts = computeMcKeyPoints(phi, moment);
+
+  const sceneBg = state.theme === "light" ? "#f7fbff" : "#06111a";
+  const lineColor = state.theme === "light" ? "#1a858e" : "#5be7ff";
+  const peakColor = state.theme === "light" ? "#d84b4b" : "#ff7f7f";
+  const yieldColor = state.theme === "light" ? "#1f9d55" : "#8ff7a7";
+  const gridColor = state.theme === "light" ? "rgba(41,74,88,0.18)" : "rgba(159,197,202,0.18)";
+  const textColor = state.theme === "light" ? "#17323d" : "#cde6eb";
+
+  const phiLabel = state.lang === "en" ? "φ (1/m)" : "φ (1/m)";
+  const mLabel = state.lang === "en" ? "M (kNm)" : "M (kNm)";
+
+  const curveTrace = {
+    type: "scatter",
+    mode: "lines",
+    x: phi,
+    y: moment,
+    name: state.lang === "en" ? "M–φ curve" : "M–φ eğrisi",
+    line: { color: lineColor, width: 2.5 },
+    hovertemplate: `φ: %{x:.5f} 1/m<br>M: %{y:.1f} kNm<extra></extra>`,
+  };
+
+  const peakTrace = {
+    type: "scatter",
+    mode: "markers+text",
+    x: [keyPts.phiU],
+    y: [keyPts.mu],
+    name: state.lang === "en" ? "Peak (Mu)" : "Tepe (Mu)",
+    text: [`Mu=${fmt(keyPts.mu, 1)} kNm`],
+    textposition: "top right",
+    textfont: { color: peakColor, size: 11 },
+    marker: { color: peakColor, size: 10, symbol: "diamond" },
+    hovertemplate: `Mu: %{y:.1f} kNm<br>φu: %{x:.5f}<extra></extra>`,
+  };
+
+  // Draw idealised bilinear as two dashed segments
+  const bilinearTrace = {
+    type: "scatter",
+    mode: "lines",
+    x: [0, keyPts.phiY, keyPts.phiU],
+    y: [0, keyPts.mu, keyPts.mu],
+    name: state.lang === "en" ? "Bilinear idealisation" : "Bilineer idealleştirme",
+    line: { color: yieldColor, width: 1.4, dash: "dash" },
+    hoverinfo: "skip",
+  };
+
+  const yieldTrace = {
+    type: "scatter",
+    mode: "markers+text",
+    x: [keyPts.phiY],
+    y: [keyPts.mu],
+    name: state.lang === "en" ? "Yield (φy)" : "Akma (φy)",
+    text: [`φy=${keyPts.phiY.toExponential(3)}`],
+    textposition: "bottom right",
+    textfont: { color: yieldColor, size: 11 },
+    marker: { color: yieldColor, size: 9, symbol: "circle" },
+    hovertemplate: `φy: %{x:.5f}<extra></extra>`,
+  };
+
+  const layout = {
+    paper_bgcolor: "rgba(0,0,0,0)",
+    plot_bgcolor: sceneBg,
+    margin: { l: 72, r: 28, t: 32, b: 64 },
+    xaxis: {
+      title: { text: phiLabel, font: { color: textColor } },
+      color: textColor,
+      gridcolor: gridColor,
+      zerolinecolor: gridColor,
+    },
+    yaxis: {
+      title: { text: mLabel, font: { color: textColor } },
+      color: textColor,
+      gridcolor: gridColor,
+      zerolinecolor: gridColor,
+    },
+    legend: {
+      font: { color: textColor, size: 11 },
+      bgcolor: "rgba(0,0,0,0)",
+    },
+    font: { color: textColor },
+  };
+
+  const config = { responsive: true, displaylogo: false, scrollZoom: false };
+
+  try {
+    (Plotly as any).react(host, [curveTrace, bilinearTrace, peakTrace, yieldTrace], layout, config);
+  } catch (e) {
+    host.textContent = String(e);
+    return;
+  }
+
+  // Stats box
+  const pUser = Number(refs.mcP.value) * pSignFactor;
+  const angleDeg = Number(refs.mcAngle.value) || 0;
+  const pLabel = state.lang === "en"
+    ? `P = ${fmt(pUser, 1)} kN (WASM convention), angle = ${fmt(angleDeg, 1)}°`
+    : `P = ${fmt(pUser, 1)} kN (WASM yönü), açı = ${fmt(angleDeg, 1)}°`;
+
+  statsDiv.innerHTML = `
+    <p class="mc-stats-meta">${escapeHtml(pLabel)}</p>
+    <div class="mc-stats-grid">
+      <span class="mc-stat-label">${tx("mcStatsMu")}</span><span class="mc-stat-value">${fmt(keyPts.mu, 1)} kNm</span>
+      <span class="mc-stat-label">${tx("mcStatsPhiU")}</span><span class="mc-stat-value">${keyPts.phiU.toExponential(4)} 1/m</span>
+      <span class="mc-stat-label">${tx("mcStatsPhiY")}</span><span class="mc-stat-value">${keyPts.phiY.toExponential(4)} 1/m</span>
+      <span class="mc-stat-label">${tx("mcStatsDuctility")}</span><span class="mc-stat-value">${fmt(keyPts.ductility, 2)}</span>
+    </div>
+  `;
+  statsDiv.classList.remove("hidden");
 }
 
 function exportWordReport(): void {
