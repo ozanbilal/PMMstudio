@@ -820,3 +820,167 @@ export function getPointMy(index: i32): f64 {
   if (index < pointsMy.length) return unchecked(pointsMy[index]);
   return 0.0;
 }
+
+// ---------------------------------------------------------------------------
+// Moment–Curvature Analysis
+// ---------------------------------------------------------------------------
+
+let mcPhiArr = new Array<f64>();
+let mcMomentArr = new Array<f64>();
+
+/**
+ * Evaluate net axial force (kN) for a given neutral-axis depth c and
+ * curvature phi. The extreme-compression-fibre strain is eps_top = phi * c,
+ * identical to the epsCu parameter used by computeResponse.
+ */
+function evalForceAtPhiC(
+  nx: f64,
+  ny: f64,
+  c: f64,
+  phi: f64,
+  k1: f64,
+  concStress: f64,
+  fyd: f64,
+  esKn: f64,
+  barArea: f64
+): f64 {
+  let epsTop = phi * c;
+  let res = computeResponse(nx, ny, c, epsTop, k1, concStress, fyd, esKn, barArea);
+  return unchecked(res[0]);
+}
+
+/**
+ * Bisection: find neutral-axis depth c in [cLo, cHi] such that
+ * net axial force equals P_target (kN). Returns -1 if no crossing.
+ */
+function bisectCForP(
+  nx: f64,
+  ny: f64,
+  phi: f64,
+  pTarget: f64,
+  cLo: f64,
+  cHi: f64,
+  k1: f64,
+  concStress: f64,
+  fyd: f64,
+  esKn: f64,
+  barArea: f64
+): f64 {
+  let fLo = evalForceAtPhiC(nx, ny, cLo, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
+  let fHi = evalForceAtPhiC(nx, ny, cHi, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
+  if (fLo * fHi > 0.0) return -1.0;
+
+  for (let iter = 0; iter < 64; iter++) {
+    let cMid = 0.5 * (cLo + cHi);
+    let fMid = evalForceAtPhiC(nx, ny, cMid, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
+    if (Math.abs(fMid) < 0.5) return cMid; // 0.5 kN tolerance
+    if (fLo * fMid <= 0.0) {
+      cHi = cMid;
+    } else {
+      cLo = cMid;
+      fLo = fMid;
+    }
+  }
+  return 0.5 * (cLo + cHi);
+}
+
+/**
+ * Build the moment–curvature curve for a given axial load P_kN (positive =
+ * compression, matching WASM convention) and bending-axis direction (nx, ny).
+ *
+ * Curvature phi is swept on a log-scale from a very small value up to the
+ * concrete ultimate strain limit. Results are stored in mcPhiArr / mcMomentArr.
+ *
+ * Prerequisites: configureRect or configureCircle must have been called first
+ * so that section geometry and concrete model parameters are initialised.
+ *
+ * Returns the number of valid points computed, or 0 on error.
+ */
+export function buildMomentCurvature(
+  pKn: f64,
+  nx: f64,
+  ny: f64,
+  nSteps: i32,
+  fck: f64,
+  fyk: f64,
+  gammaC: f64,
+  gammaS: f64,
+  esMpa: f64,
+  barDia: f64
+): i32 {
+  mcPhiArr.length = 0;
+  mcMomentArr.length = 0;
+
+  if (nSteps < 5) return 0;
+  if (fibersX.length == 0 || barsX.length == 0) return 0;
+
+  let fcd = fck / gammaC;
+  let fyd = (fyk / gammaS) * MPA_TO_KN_M2;
+  let esKn = esMpa * MPA_TO_KN_M2;
+  let concStress = 0.85 * fcd * MPA_TO_KN_M2;
+  let k1 = ts500K1(fck);
+  let barArea = Math.PI * barDia * barDia / 4.0;
+
+  // Normalise direction vector
+  let len = Math.sqrt(nx * nx + ny * ny);
+  if (len < EPS) return 0;
+  nx = nx / len;
+  ny = ny / len;
+
+  let depth = sectionDepth(nx, ny);
+  if (depth < EPS) return 0;
+
+  // Choose ultimate strain: prefer confined model when active
+  let epsUlt = unconfEcu;
+  if (concreteModel == 1 && confActive != 0 && confEcu > epsUlt) {
+    epsUlt = confEcu;
+  }
+  if (epsUlt < 0.001) epsUlt = 0.003; // safety floor
+
+  // phi range on log scale: from near-elastic to concrete crushing at 3% depth
+  let phiMax = epsUlt / (depth * 0.03);
+  let phiMin = phiMax / 3000.0;
+  if (phiMin < 1e-8) phiMin = 1e-8;
+
+  let logMin = Math.log(phiMin);
+  let logMax = Math.log(phiMax);
+
+  for (let i = 0; i < nSteps; i++) {
+    let t = <f64>i / <f64>(nSteps - 1);
+    let phi = Math.exp(logMin + t * (logMax - logMin));
+
+    // Upper c bound: extreme fibre strain = 1.5 * epsUlt
+    let cMaxB = (epsUlt * 1.5) / phi;
+    if (cMaxB > depth * 300.0) cMaxB = depth * 300.0;
+    let cLo = depth * 5e-5;
+    if (cLo >= cMaxB) continue;
+
+    let c = bisectCForP(nx, ny, phi, pKn, cLo, cMaxB, k1, concStress, fyd, esKn, barArea);
+    if (c < 0.0) continue;
+
+    let epsTop = phi * c;
+    let res = computeResponse(nx, ny, c, epsTop, k1, concStress, fyd, esKn, barArea);
+    let Mx = unchecked(res[1]);
+    let My = unchecked(res[2]);
+    let M = Math.sqrt(Mx * Mx + My * My);
+
+    mcPhiArr.push(phi);
+    mcMomentArr.push(M);
+  }
+
+  return mcPhiArr.length;
+}
+
+export function getMcCount(): i32 {
+  return mcPhiArr.length;
+}
+
+export function getMcPhi(index: i32): f64 {
+  if (index < 0 || index >= mcPhiArr.length) return 0.0;
+  return unchecked(mcPhiArr[index]);
+}
+
+export function getMcMoment(index: i32): f64 {
+  if (index < 0 || index >= mcMomentArr.length) return 0.0;
+  return unchecked(mcMomentArr[index]);
+}

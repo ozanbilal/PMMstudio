@@ -1053,6 +1053,92 @@ tr.info td:nth-child(6) {
   }
 }
 
+/* ── Moment–Curvature panel ─────────────────────────────────────────────── */
+
+.mc-intro {
+  color: var(--text);
+  opacity: 0.78;
+  font-size: 0.92rem;
+  margin-bottom: 16px;
+}
+
+.mc-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 8px;
+}
+
+.mc-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.mc-controls label span {
+  font-size: 0.82rem;
+  color: var(--text);
+  opacity: 0.72;
+}
+
+.mc-controls input {
+  width: 140px;
+}
+
+.mc-angle-hint {
+  font-size: 0.80rem;
+  color: var(--text);
+  opacity: 0.55;
+  margin: 2px 0 18px;
+}
+
+.plot-mc {
+  width: 100%;
+  height: 420px;
+  margin-bottom: 16px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.mc-stats {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+  display: inline-block;
+}
+
+.mc-stats.hidden {
+  display: none;
+}
+
+.mc-stats-meta {
+  font-size: 0.82rem;
+  color: var(--text);
+  opacity: 0.65;
+  margin: 0 0 10px;
+}
+
+.mc-stats-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 20px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.88rem;
+}
+
+.mc-stat-label {
+  color: var(--text);
+  opacity: 0.70;
+}
+
+.mc-stat-value {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 @media (max-width: 760px) {
   #app {
     padding: 14px 12px 28px;
