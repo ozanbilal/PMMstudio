@@ -75,6 +75,9 @@ interface WasmExports {
   getMcCount: () => number;
   getMcPhi: (index: number) => number;
   getMcMoment: (index: number) => number;
+  getMcNeutralAxis: (index: number) => number;
+  getMcEpsC: (index: number) => number;
+  getMcEpsS: (index: number) => number;
 }
 
 interface LoadCase {
@@ -174,6 +177,7 @@ app.innerHTML = `
             </select>
           </label>
         </div>
+        <a href="/tgua.html" class="tgua-hero-link" data-i18n="tguaLink">TGUA Maliyet Hesap →</a>
       </div>
 
       <svg class="hero-pmm" viewBox="0 0 1200 120" preserveAspectRatio="none" aria-hidden="true" focusable="false">
@@ -290,7 +294,7 @@ app.innerHTML = `
 
               <label>
                 <span data-i18n="labelCover">Cover (m)</span>
-                <input id="cover" type="number" value="0.04" min="0.005" step="0.001" />
+                <input id="cover" type="number" value="0.04" min="0.005" step="any" />
               </label>
               <label>
                 <span data-i18n="labelTieDia">Etriye çapı (mm)</span>
@@ -438,8 +442,9 @@ L3,650,90,45</textarea>
         </section>
       </section>
 
-      <section class="panel viz">
-        <div class="viz-head">
+      <div class="right-col-wrap" style="display: flex; flex-direction: column; gap: 16px;">
+        <section class="panel viz">
+          <div class="viz-head">
           <h2 data-i18n="headingCloud">PMM Nokta Bulutu</h2>
           <label class="compact-field">
           <span data-i18n="labelProjection">Görünüm</span>
@@ -484,7 +489,54 @@ L3,650,90,45</textarea>
           </section>
           <div id="plot-3d" class="plot3d"></div>
         </div>
-      </section>
+        </section>
+
+        <details class="panel accordion" id="mc-accordion" open>
+          <summary class="accordion-head">
+            <h2 data-i18n="headingMc">Moment – Eğrilik Analizi</h2>
+            <span class="accordion-hint" data-i18n="accordionHint">Aç / Kapat</span>
+          </summary>
+          <div class="accordion-body">
+            <p class="mc-intro" data-i18n="mcIntro">
+              Verilen eksenel yük altında tek eksenli eğilme için M–φ eğrisi hesaplar.
+              Önce PMM analizi çalıştırılmış olmalıdır.
+            </p>
+            <div class="mc-controls">
+              <label>
+                <span data-i18n="labelMcP">Eksenel yük P (kN)</span>
+                <input id="mc-p" type="number" value="1200" step="50" />
+              </label>
+              <label>
+                <span data-i18n="labelMcAngle">Eğilme açısı (°)</span>
+                <input id="mc-angle" type="number" value="0" min="0" max="359" step="5" />
+              </label>
+              <label>
+                <span data-i18n="labelMcSteps">Adım sayısı</span>
+                <input id="mc-steps" type="number" value="80" min="20" max="400" step="10" />
+              </label>
+              <button id="mc-run-btn" class="run-btn" data-i18n="btnMcRun">M–φ Hesapla</button>
+            </div>
+            <p class="mc-angle-hint" data-i18n="mcAngleHint">
+              0° = Mx eğilmesi (yatay nötr eksen) · 90° = My eğilmesi (düşey nötr eksen)
+            </p>
+            <div class="mc-plot-row">
+              <div id="plot-mc" class="plot-mc"></div>
+              <div id="plot-mc-strain" class="plot-mc-strain"></div>
+            </div>
+            <div id="mc-stats" class="mc-stats hidden"></div>
+            <div id="mc-hover-info" class="mc-hover-info hidden">
+              <span class="mc-hi-label">Concrete Strain:</span><span id="mc-hi-epsc" class="mc-hi-val">—</span>
+              <span class="mc-hi-label">Steel Strain:</span><span id="mc-hi-epss" class="mc-hi-val">—</span>
+              <span class="mc-hi-label">Neutral Axis:</span><span id="mc-hi-na" class="mc-hi-val">—</span>
+            </div>
+            <div class="mc-actions">
+              <button type="button" id="mc-export-btn" class="action-btn" data-i18n="btnMcExport">Excel (CSV)</button>
+              <button type="button" id="mc-copy-btn" class="action-btn" data-i18n="btnMcCopy">Veriyi Kopyala</button>
+              <button type="button" id="mc-fullscreen-btn" class="action-btn" data-i18n="btnMcFullscreen">Büyüt</button>
+            </div>
+          </div>
+        </details>
+      </div>
 
       <details class="panel panel-full accordion guide-accordion" id="guide-accordion">
         <summary class="accordion-head">
@@ -564,38 +616,6 @@ L3,650,90,45</textarea>
         </div>
       </details>
 
-      <details class="panel panel-full accordion" id="mc-accordion">
-        <summary class="accordion-head">
-          <h2 data-i18n="headingMc">Moment – Eğrilik Analizi</h2>
-          <span class="accordion-hint" data-i18n="accordionHint">Aç / Kapat</span>
-        </summary>
-        <div class="accordion-body">
-          <p class="mc-intro" data-i18n="mcIntro">
-            Verilen eksenel yük altında tek eksenli eğilme için M–φ eğrisi hesaplar.
-            Önce PMM analizi çalıştırılmış olmalıdır.
-          </p>
-          <div class="mc-controls">
-            <label>
-              <span data-i18n="labelMcP">Eksenel yük P (kN)</span>
-              <input id="mc-p" type="number" value="1200" step="50" />
-            </label>
-            <label>
-              <span data-i18n="labelMcAngle">Eğilme açısı (°)</span>
-              <input id="mc-angle" type="number" value="0" min="0" max="359" step="5" />
-            </label>
-            <label>
-              <span data-i18n="labelMcSteps">Adım sayısı</span>
-              <input id="mc-steps" type="number" value="80" min="20" max="400" step="10" />
-            </label>
-            <button id="mc-run-btn" class="run-btn" data-i18n="btnMcRun">M–φ Hesapla</button>
-          </div>
-          <p class="mc-angle-hint" data-i18n="mcAngleHint">
-            0° = Mx eğilmesi (yatay nötr eksen) · 90° = My eğilmesi (düşey nötr eksen)
-          </p>
-          <div id="plot-mc" class="plot-mc"></div>
-          <div id="mc-stats" class="mc-stats hidden"></div>
-        </div>
-      </details>
     </main>
   </div>
 `;
@@ -672,11 +692,22 @@ const refs = {
   mcRunBtn: must<HTMLButtonElement>("mc-run-btn"),
   plotMc: must<HTMLDivElement>("plot-mc"),
   mcStats: must<HTMLDivElement>("mc-stats"),
+  mcFullscreenBtn: must<HTMLButtonElement>("mc-fullscreen-btn"),
+  mcCopyBtn: must<HTMLButtonElement>("mc-copy-btn"),
+  mcExportBtn: must<HTMLButtonElement>("mc-export-btn"),
+  plotMcStrain: must<HTMLDivElement>("plot-mc-strain"),
+  mcHoverInfo: must<HTMLDivElement>("mc-hover-info"),
+  mcHiEpsC: must<HTMLSpanElement>("mc-hi-epsc"),
+  mcHiEpsS: must<HTMLSpanElement>("mc-hi-epss"),
+  mcHiNA: must<HTMLSpanElement>("mc-hi-na"),
 };
 
 interface McData {
   phi: number[];
   moment: number[];
+  neutralAxis: number[];
+  epsC: number[];
+  epsS: number[];
 }
 
 const state: {
@@ -722,6 +753,7 @@ const I18N = {
     labelTheme: "Tema",
     optThemeDark: "Karanlık",
     optThemeLight: "Aydınlık",
+    tguaLink: "TGUA Maliyet Hesap →",
     headingRunLog: "Çalışma Günlüğü",
     statusLogEmpty: "Henüz kayıt yok.",
     labelCodeMode: "Kod Modu",
@@ -865,6 +897,10 @@ const I18N = {
     mcStatsPhiU: "φu",
     mcStatsPhiY: "φy (bilineer)",
     mcStatsDuctility: "μφ = φu/φy",
+    btnMcFullscreen: "Büyüt",
+    btnMcCopy: "Veriyi Kopyala",
+    btnMcExport: "Excel (CSV)",
+    statusMcCopied: "M-φ verileri panoya kopyalandı.",
   },
   en: {
     kicker: "TS500 + WebAssembly",
@@ -876,6 +912,7 @@ const I18N = {
     labelTheme: "Theme",
     optThemeDark: "Dark",
     optThemeLight: "Light",
+    tguaLink: "TGUA Cost Calculator →",
     headingRunLog: "Run Log",
     statusLogEmpty: "No logs yet.",
     labelCodeMode: "Code Mode",
@@ -1019,6 +1056,10 @@ const I18N = {
     mcStatsPhiU: "φu",
     mcStatsPhiY: "φy (bilinear)",
     mcStatsDuctility: "μφ = φu/φy",
+    btnMcFullscreen: "Expand",
+    btnMcCopy: "Copy Data",
+    btnMcExport: "Excel (CSV)",
+    statusMcCopied: "M-φ data copied to clipboard.",
   },
 } as const;
 
@@ -1245,6 +1286,9 @@ async function init(): Promise<void> {
   refs.exportSurface.addEventListener("click", exportSurfaceCsv);
   refs.exportReport.addEventListener("click", exportWordReport);
   refs.mcRunBtn.addEventListener("click", () => runMomentCurvature().catch(showError));
+  refs.mcFullscreenBtn.addEventListener("click", toggleMcFullscreen);
+  refs.mcCopyBtn.addEventListener("click", () => copyMcData().catch(showError));
+  refs.mcExportBtn.addEventListener("click", exportMcDataToCsv);
 
   setStatus(tx("statusWasmLoading"), "info");
   state.wasm = await loadWasm();
@@ -3167,20 +3211,75 @@ async function runMomentCurvature(): Promise<void> {
 
   if (count === 0) throw new Error(tx("statusMcNoPoints"));
 
-  const phi: number[] = [];
-  const moment: number[] = [];
+  const tempPhi: number[] = [];
+  const tempMom: number[] = [];
+  const tempNA: number[] = [];
+  const tempEpsC: number[] = [];
+  const tempEpsS: number[] = [];
+  let peakMoment = 0;
   for (let i = 0; i < count; i++) {
-    phi.push(wasm.getMcPhi(i));
-    moment.push(wasm.getMcMoment(i));
+    const m = wasm.getMcMoment(i);
+    tempPhi.push(wasm.getMcPhi(i));
+    tempMom.push(m);
+    tempNA.push(wasm.getMcNeutralAxis(i));
+    tempEpsC.push(wasm.getMcEpsC(i));
+    tempEpsS.push(wasm.getMcEpsS(i));
+    if (m > peakMoment) peakMoment = m;
   }
 
-  state.mcData = { phi, moment };
+  // Determine concrete ultimate strain for truncation
+  const epsCuLimit = input.epsCu > 0 ? input.epsCu : 0.003;
+  // For Mander confined model, use the higher confined εcu from the model
+  const epsCuCutoff = input.concreteModel === "mander_core_cover" ? epsCuLimit * 2.5 : epsCuLimit;
+
+  // First pass: find last valid index (where εc <= εcu)
+  // Allow going slightly beyond εcu to capture the descending branch start
+  let lastConcreteIdx = count - 1;
+  let firstExceedIdx = -1;
+  for (let i = 0; i < count; i++) {
+    if (tempEpsC[i] > epsCuCutoff && firstExceedIdx < 0) {
+      firstExceedIdx = i;
+      // Include a few points past εcu to show the knee
+      lastConcreteIdx = Math.min(count - 1, i + 3);
+      break;
+    }
+  }
+
+  // Second pass: also check for moment drop below 80% after peak
+  const minAllowedMoment = peakMoment > 0 ? peakMoment * 0.5 : 0;
+  let peakFound = false;
+
+  const phi: number[] = [];
+  const moment: number[] = [];
+  const neutralAxis: number[] = [];
+  const epsC: number[] = [];
+  const epsS: number[] = [];
+  const endIdx = Math.min(count, lastConcreteIdx + 1);
+  for (let i = 0; i < endIdx; i++) {
+    const m = tempMom[i];
+
+    phi.push(tempPhi[i]);
+    moment.push(m);
+    neutralAxis.push(tempNA[i]);
+    epsC.push(tempEpsC[i]);
+    epsS.push(tempEpsS[i]);
+    
+    if (m >= peakMoment * 0.99) peakFound = true;
+    
+    // Stop at 50% point on descending branch (severe drop = section failed)
+    if (peakFound && m < minAllowedMoment) {
+      break;
+    }
+  }
+
+  state.mcData = { phi, moment, neutralAxis, epsC, epsS };
   renderMcPlot(state.mcData);
   setStatus(tx("statusMcDone"), "info");
 }
 
 interface McKeyPoints {
   mu: number;
+  phiPeak: number;
   phiU: number;
   phiY: number;
   ductility: number;
@@ -3203,11 +3302,12 @@ function computeMcKeyPoints(phi: number[], moment: number[]): McKeyPoints {
   for (let i = 0; i < n; i++) {
     if (moment[i] > mu) { mu = moment[i]; muIdx = i; }
   }
-  const phiU = phi[muIdx];
+  const phiPeak = phi[muIdx];
+  const phiU = phi[n - 1];
 
   // Trapezoidal area from 0 to φu
   let area = 0;
-  for (let i = 1; i <= muIdx; i++) {
+  for (let i = 1; i < n; i++) {
     area += 0.5 * (moment[i - 1] + moment[i]) * (phi[i] - phi[i - 1]);
   }
 
@@ -3216,7 +3316,7 @@ function computeMcKeyPoints(phi: number[], moment: number[]): McKeyPoints {
   if (phiY <= 0 || phiY > phiU) phiY = phiU * 0.2; // fallback
   const ductility = phiU / phiY;
 
-  return { mu, phiU, phiY, ductility };
+  return { mu, phiPeak, phiU, phiY, ductility };
 }
 
 function renderMcPlot(data: McData): void {
@@ -3252,14 +3352,14 @@ function renderMcPlot(data: McData): void {
   const peakTrace = {
     type: "scatter",
     mode: "markers+text",
-    x: [keyPts.phiU],
+    x: [keyPts.phiPeak],
     y: [keyPts.mu],
     name: state.lang === "en" ? "Peak (Mu)" : "Tepe (Mu)",
     text: [`Mu=${fmt(keyPts.mu, 1)} kNm`],
     textposition: "top right",
     textfont: { color: peakColor, size: 11 },
     marker: { color: peakColor, size: 10, symbol: "diamond" },
-    hovertemplate: `Mu: %{y:.1f} kNm<br>φu: %{x:.5f}<extra></extra>`,
+    hovertemplate: `Mu: %{y:.1f} kNm<br>φ_peak: %{x:.5f}<extra></extra>`,
   };
 
   // Draw idealised bilinear as two dashed segments
@@ -3283,7 +3383,7 @@ function renderMcPlot(data: McData): void {
     textposition: "bottom right",
     textfont: { color: yieldColor, size: 11 },
     marker: { color: yieldColor, size: 9, symbol: "circle" },
-    hovertemplate: `φy: %{x:.5f}<extra></extra>`,
+    hovertemplate: `φy: %{x:.5f}<br>M(İdealize): %{y:.1f} kNm<extra></extra>`,
   };
 
   const layout = {
@@ -3313,6 +3413,26 @@ function renderMcPlot(data: McData): void {
 
   try {
     (Plotly as any).react(host, [curveTrace, bilinearTrace, peakTrace, yieldTrace], layout, config);
+
+    // Hover sync: update strain diagram on hover
+    // Hover sync: update strain diagram on hover
+    (host as any).on("plotly_hover", (ev: any) => {
+      if (!ev || !ev.points || ev.points.length === 0) return;
+      const pt = ev.points[0];
+      if (pt.curveNumber !== 0) return; // only on main curve
+      const idx = pt.pointIndex as number;
+      if (state.mcData) {
+        updateMcHoverInfo(state.mcData, idx);
+        renderStrainDiagram(state.mcData, idx);
+      }
+    });
+
+    // Render strain diagram for last point by default
+    if (data.phi.length > 0) {
+      const lastIdx = data.phi.length - 1;
+      updateMcHoverInfo(data, lastIdx);
+      renderStrainDiagram(data, lastIdx);
+    }
   } catch (e) {
     host.textContent = String(e);
     return;
@@ -3513,4 +3633,160 @@ function escapeHtml(v: string): string {
         return "&#39;";
     }
   });
+}
+
+function toggleMcFullscreen(): void {
+  const acc = document.getElementById("mc-accordion");
+  if (!acc) return;
+  acc.classList.toggle("mc-fullscreen");
+  if (state.mcData) {
+    setTimeout(() => {
+      (Plotly as any).Plots.resize(refs.plotMc);
+      (Plotly as any).Plots.resize(refs.plotMcStrain);
+    }, 50);
+  }
+}
+
+function mcClipboardText(data: McData): string {
+  const lines = ["No\tPhi_1/m\tMoment_kNm\tNA_m\tEps_c\tEps_s"];
+  for (let i = 0; i < data.phi.length; i++) {
+    lines.push(`${i + 1}\t${data.phi[i].toExponential(5)}\t${data.moment[i].toFixed(2)}\t${data.neutralAxis[i].toFixed(4)}\t${data.epsC[i].toExponential(4)}\t${data.epsS[i].toExponential(4)}`);
+  }
+  return lines.join("\n");
+}
+
+async function copyMcData(): Promise<void> {
+  if (!state.mcData || state.mcData.phi.length === 0) return;
+  await writeClipboardText(mcClipboardText(state.mcData));
+  setStatus(tx("statusMcCopied"), "info");
+}
+
+function exportMcDataToCsv(): void {
+  if (!state.mcData || state.mcData.phi.length === 0) return;
+  const rows = ["No,Phi_1/m,Moment_kNm,NA_m,Eps_c,Eps_s"];
+  for (let i = 0; i < state.mcData.phi.length; i++) {
+    rows.push(`${i + 1},${state.mcData.phi[i].toExponential(5)},${state.mcData.moment[i].toFixed(2)},${state.mcData.neutralAxis[i].toFixed(4)},${state.mcData.epsC[i].toExponential(4)},${state.mcData.epsS[i].toExponential(4)}`);
+  }
+  downloadText("moment_curvature.csv", rows.join("\n"));
+}
+
+function updateMcHoverInfo(data: McData, idx: number): void {
+  if (idx < 0 || idx >= data.phi.length) return;
+  refs.mcHoverInfo.classList.remove("hidden");
+  const epsCLabel = state.lang === "en" ? "Concrete Strain:" : "Beton Birim Uzama:";
+  const epsSLabel = state.lang === "en" ? "Steel Strain:" : "Çelik Birim Uzama:";
+  const naLabel = state.lang === "en" ? "Neutral Axis:" : "Tarafsız Eksen:";
+  // Update labels (they're static in HTML, so update via siblings)
+  const labels = refs.mcHoverInfo.querySelectorAll(".mc-hi-label");
+  if (labels[0]) labels[0].textContent = epsCLabel;
+  if (labels[1]) labels[1].textContent = epsSLabel;
+  if (labels[2]) labels[2].textContent = naLabel;
+  refs.mcHiEpsC.textContent = data.epsC[idx].toExponential(4);
+  refs.mcHiEpsS.textContent = data.epsS[idx].toExponential(4);
+  refs.mcHiNA.textContent = (data.neutralAxis[idx] * 1000).toFixed(1) + " mm";
+}
+
+function renderStrainDiagram(data: McData, idx: number): void {
+  if (idx < 0 || idx >= data.phi.length) return;
+  const host = refs.plotMcStrain;
+  const phi_i = data.phi[idx];
+  const c_i = data.neutralAxis[idx];
+  const epsC_i = data.epsC[idx];
+
+  // Compute section depth from lastInput
+  let depth = 0.5; // fallback
+  if (state.lastInput) {
+    if (state.lastInput.shape === "rect") {
+      depth = state.lastInput.heightM;
+    } else {
+      depth = state.lastInput.diameterM;
+    }
+  }
+
+  // Strain profile: linear from epsC_i at top to eps_bottom at bottom
+  const sMax = depth; // simplified: section depth
+  const epsBottom = phi_i * (c_i - sMax);
+
+  // Build strain profile line (top to bottom)
+  const yPositions = [0, c_i * 1000, depth * 1000]; // in mm
+  const strainValues = [epsC_i, 0, epsBottom];
+
+  const sceneBg = state.theme === "light" ? "#f7fbff" : "#06111a";
+  const lineColor = state.theme === "light" ? "#d84b4b" : "#ff7f7f";
+  const naColor = state.theme === "light" ? "#1a858e" : "#5be7ff";
+  const gridColor = state.theme === "light" ? "rgba(41,74,88,0.18)" : "rgba(159,197,202,0.18)";
+  const textColor = state.theme === "light" ? "#17323d" : "#cde6eb";
+
+  const strainTrace = {
+    type: "scatter",
+    mode: "lines+markers",
+    x: strainValues,
+    y: yPositions,
+    name: state.lang === "en" ? "Strain Profile" : "Birim Uzama Profili",
+    line: { color: lineColor, width: 2.5 },
+    marker: { size: 6, color: lineColor },
+    hovertemplate: `ε: %{x:.5f}<br>y: %{y:.1f} mm<extra></extra>`,
+  };
+
+  // Neutral axis line (horizontal dashed)
+  const naTrace = {
+    type: "scatter",
+    mode: "lines",
+    x: [Math.min(epsBottom, -Math.abs(epsC_i) * 0.3), Math.max(epsC_i, Math.abs(epsBottom) * 0.3)],
+    y: [c_i * 1000, c_i * 1000],
+    name: state.lang === "en" ? "Neutral Axis" : "Tarafsız Eksen",
+    line: { color: naColor, width: 1.5, dash: "dash" },
+    hoverinfo: "skip",
+  };
+
+  // Zero strain vertical reference
+  const zeroTrace = {
+    type: "scatter",
+    mode: "lines",
+    x: [0, 0],
+    y: [0, depth * 1000],
+    showlegend: false,
+    line: { color: gridColor, width: 1 },
+    hoverinfo: "skip",
+  };
+
+  const yLabel = state.lang === "en" ? "Depth (mm)" : "Derinlik (mm)";
+  const xLabel = state.lang === "en" ? "Strain (ε)" : "Birim Uzama (ε)";
+
+  const layout = {
+    paper_bgcolor: "rgba(0,0,0,0)",
+    plot_bgcolor: sceneBg,
+    margin: { l: 60, r: 20, t: 32, b: 56 },
+    title: {
+      text: state.lang === "en" ? "Strain Diagram" : "Birim Uzama Diyagramı",
+      font: { color: textColor, size: 13 },
+    },
+    xaxis: {
+      title: { text: xLabel, font: { color: textColor, size: 11 } },
+      color: textColor,
+      gridcolor: gridColor,
+      zerolinecolor: gridColor,
+    },
+    yaxis: {
+      title: { text: yLabel, font: { color: textColor, size: 11 } },
+      color: textColor,
+      gridcolor: gridColor,
+      zerolinecolor: gridColor,
+      autorange: "reversed" as const,
+    },
+    legend: {
+      font: { color: textColor, size: 10 },
+      bgcolor: "rgba(0,0,0,0)",
+    },
+    font: { color: textColor },
+    showlegend: true,
+  };
+
+  const config = { responsive: true, displaylogo: false, scrollZoom: false, staticPlot: false };
+
+  try {
+    (Plotly as any).react(host, [zeroTrace, strainTrace, naTrace], layout, config);
+  } catch (e) {
+    host.textContent = String(e);
+  }
 }

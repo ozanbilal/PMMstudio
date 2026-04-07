@@ -827,6 +827,9 @@ export function getPointMy(index: i32): f64 {
 
 let mcPhiArr = new Array<f64>();
 let mcMomentArr = new Array<f64>();
+let mcNeutralAxisArr = new Array<f64>();
+let mcEpsCArr = new Array<f64>();
+let mcEpsSArr = new Array<f64>();
 
 /**
  * Evaluate net axial force (kN) for a given neutral-axis depth c and
@@ -910,6 +913,9 @@ export function buildMomentCurvature(
 ): i32 {
   mcPhiArr.length = 0;
   mcMomentArr.length = 0;
+  mcNeutralAxisArr.length = 0;
+  mcEpsCArr.length = 0;
+  mcEpsSArr.length = 0;
 
   if (nSteps < 5) return 0;
   if (fibersX.length == 0 || barsX.length == 0) return 0;
@@ -966,6 +972,21 @@ export function buildMomentCurvature(
 
     mcPhiArr.push(phi);
     mcMomentArr.push(M);
+    mcNeutralAxisArr.push(c);
+
+    // Concrete strain (max compression)
+    mcEpsCArr.push(epsTop);
+
+    // Steel strain (most extreme - tension preferred for reporting ductility)
+    let sMax = sectionSmax(nx, ny);
+    let minBarS = sMax;
+    let bCount = barsX.length;
+    for (let bi = 0; bi < bCount; bi++) {
+      let bs = unchecked(barsX[bi]) * nx + unchecked(barsY[bi]) * ny;
+      if (bs < minBarS) minBarS = bs;
+    }
+    let epsS = phi * (c - (sMax - minBarS));
+    mcEpsSArr.push(epsS);
   }
 
   return mcPhiArr.length;
@@ -983,4 +1004,19 @@ export function getMcPhi(index: i32): f64 {
 export function getMcMoment(index: i32): f64 {
   if (index < 0 || index >= mcMomentArr.length) return 0.0;
   return unchecked(mcMomentArr[index]);
+}
+
+export function getMcNeutralAxis(index: i32): f64 {
+  if (index < 0 || index >= mcNeutralAxisArr.length) return 0.0;
+  return unchecked(mcNeutralAxisArr[index]);
+}
+
+export function getMcEpsC(index: i32): f64 {
+  if (index < 0 || index >= mcEpsCArr.length) return 0.0;
+  return unchecked(mcEpsCArr[index]);
+}
+
+export function getMcEpsS(index: i32): f64 {
+  if (index < 0 || index >= mcEpsSArr.length) return 0.0;
+  return unchecked(mcEpsSArr[index]);
 }

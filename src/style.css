@@ -209,6 +209,26 @@ h2 {
   min-width: min(320px, 100%);
 }
 
+.tgua-hero-link {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel-soft);
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+  justify-self: end;
+}
+
+.tgua-hero-link:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
 .hero-controls {
   display: inline-flex;
   align-items: flex-start;
@@ -1209,5 +1229,392 @@ tr.info td:nth-child(6) {
 
   .slice-table-wrap {
     max-height: 250px;
+  }
+}
+
+/* ── TGUA Calculator page ──────────────────────────────────────────────────── */
+
+.tgua-layout {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Header */
+.tgua-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 0 6px;
+  gap: 12px;
+}
+
+.tgua-header-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.tgua-header-right {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.tgua-back-link {
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+
+.tgua-back-link:hover {
+  color: var(--text);
+}
+
+.tgua-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(20px, 1.8vw, 28px);
+  font-weight: 760;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.tgua-subtitle {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.tgua-ctrl-btn {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  padding: 7px 13px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.tgua-ctrl-btn:hover {
+  background: var(--panel-2);
+  border-color: var(--line-strong);
+}
+
+/* Two-column main */
+.tgua-main {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.tgua-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Card */
+.tgua-card {
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+}
+
+.tgua-card-title {
+  margin: 0 0 18px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 720;
+  letter-spacing: -0.01em;
+}
+
+.tgua-card-title-sm {
+  font-size: 15px;
+  margin-bottom: 12px;
+}
+
+/* Fields */
+.tgua-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 14px;
+}
+
+.tgua-field:last-child {
+  margin-bottom: 0;
+}
+
+.tgua-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.tgua-input {
+  background: var(--control-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  padding: 10px 12px;
+  outline: none;
+  width: 100%;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.tgua-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--control-focus);
+}
+
+.tgua-select {
+  cursor: pointer;
+}
+
+/* Result rows */
+.tgua-result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.tgua-result-row-last {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.tgua-result-label {
+  font-size: 13px;
+  color: var(--muted);
+  flex: 1;
+  line-height: 1.3;
+}
+
+.tgua-result-value {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.tgua-result-accent {
+  color: var(--accent);
+}
+
+/* Reference table — full-width, multi-year */
+.tgua-card-wide {
+  width: 100%;
+}
+
+.tgua-ref-table-wide {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.tgua-ref-table-wide th {
+  padding: 6px 12px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: right;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.tgua-ref-table-wide th:first-child {
+  text-align: left;
+  font-family: var(--font-ui);
+}
+
+.tgua-ref-table-wide td {
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+  font-family: var(--font-mono);
+}
+
+.tgua-ref-table-wide td:first-child {
+  text-align: left;
+  font-family: var(--font-ui);
+  font-weight: 500;
+}
+
+.tgua-ref-table-wide tr:last-child td {
+  border-bottom: none;
+}
+
+.tgua-ref-active td {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.tgua-ref-empty {
+  color: var(--muted);
+  opacity: 0.4;
+}
+
+/* Footer */
+.tgua-link {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  transition: border-color 0.15s;
+}
+
+.tgua-link:hover {
+  border-color: var(--accent);
+}
+
+.tgua-footer {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  padding-bottom: 12px;
+}
+
+/* Responsive */
+@media (max-width: 780px) {
+  .tgua-main {
+    grid-template-columns: 1fr;
+  }
+
+  .tgua-header-left {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+/* Moment-Curvature Actions */
+.mc-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  justify-content: flex-end;
+}
+
+/* Side-by-side plot row */
+.mc-plot-row {
+  display: flex;
+  gap: 12px;
+  min-height: 320px;
+}
+
+.mc-plot-row .plot-mc {
+  flex: 2;
+  min-height: 300px;
+}
+
+.mc-plot-row .plot-mc-strain {
+  flex: 1;
+  min-height: 300px;
+  min-width: 200px;
+}
+
+/* Hover info bar */
+.mc-hover-info {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 8px 14px;
+  margin-top: 8px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.mc-hi-label {
+  font-weight: 600;
+  color: var(--muted);
+  margin-right: 4px;
+}
+
+.mc-hi-val {
+  font-family: "IBM Plex Mono", monospace;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* Fullscreen mode */
+.mc-fullscreen {
+  position: fixed !important;
+  inset: 2vh 2vw !important;
+  z-index: 9999;
+  background: var(--panel) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.8) !important;
+  padding: 20px !important;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.mc-fullscreen .accordion-head {
+  display: flex !important;
+  flex-shrink: 0;
+}
+
+.mc-fullscreen .accordion-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.mc-fullscreen .mc-plot-row {
+  flex: 1;
+  min-height: 0;
+}
+
+.mc-fullscreen .mc-plot-row .plot-mc {
+  flex: 2;
+  min-height: 0;
+}
+
+.mc-fullscreen .mc-plot-row .plot-mc-strain {
+  flex: 1;
+  min-height: 0;
+}
+
+.mc-fullscreen .mc-controls,
+.mc-fullscreen .mc-intro,
+.mc-fullscreen .mc-angle-hint {
+  flex-shrink: 0;
+}
+
+@media (max-width: 780px) {
+  .mc-plot-row {
+    flex-direction: column;
+  }
+
+  .mc-hover-info {
+    flex-direction: column;
+    gap: 6px;
   }
 }
