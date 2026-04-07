@@ -102,6 +102,27 @@ const UNIT_COST_BY_CLASS: Record<string, number> = Object.fromEntries(
   UNIT_COSTS.map((r) => [r.cls, r.y2026])
 );
 
+const CLASS_INFO: Record<string, string[]> = {
+  "I.A":   ["Basit hayvancılık ve tarım yapıları", "Çardaklar, gölgelikler", "İhata duvarları (3 m'ye kadar)", "Plastik örtülü seralar"],
+  "I.B":   ["Basit padok ve küçükbaş hayvan ağılları", "Cam/sert plastik örtülü seralar", "Depo amaçlı kayadan oyma yapılar", "Kalıcı kullanımlı yardımcı yapılar"],
+  "I.C":   ["Betonarme ve kâgir su depoları", "Büyükbaş hayvan ahırları", "Elektrikli araç şarj istasyonları", "İstinat duvarları", "Palplanş ve ankrajlı perde", "Şişirme yapılar"],
+  "I.D":   ["Güneş enerji santralleri (GES)"],
+  "II.A":  ["Deniz iskeleleri", "Genel amaçlı depolar (betonarme, çelik)", "Hayvan bakımevi ve barınakları", "Hayvan satış pazar yerleri", "Tarımsal endüstri yapıları"],
+  "II.B":  ["Botanik, jeopark ve tema park yapıları", "Geçici yapılar, konteyner kentler", "Halı sahalar, semt sahaları", "Hangar yapıları", "Kapalı pazar yerleri"],
+  "II.C":  ["Bağ/dağ/köy ve yayla evleri (brüt < 200 m²)", "Bungalov evleri", "Hal binaları", "Mezbahalar", "Sanayi tesisleri (0–500 kg/m²)", "Taziye evleri"],
+  "III.A": ["Akaryakıt ve otogaz dolum istasyonları", "Aquaparklar", "Garajlar, katlı otoparklar", "Havalimanı destek binaları", "İtfaiye binaları", "Kayadan oyma konutlar", "Konutlar (apartman, 3 kata kadar)", "Kreşler, okul öncesi eğitim", "Köy ve mahalle konakları", "Muhtarlık binaları", "Özelliği olan depolar (kimyasal, soğuk hava)", "Semt postaneleri", "Sosyal tesisler (havuz, hamam, sauna)"],
+  "III.B": ["112 acil sağlık hizmetleri istasyonları", "Aile sağlığı merkezleri", "Apart oteller", "Gece kulübü ve eğlence yerleri", "Hayvan hastaneleri", "İbadethaneler (< 500 kişi)", "İlçe tipi otobüs terminalleri", "İlkokul ve ortaokul yapıları", "İş merkezleri (3 kata kadar)", "Kapalı spor salonları (< 1.000 seyirci)", "Konutlar (yükseklik ≤ 21,50 m, 3 kat üzeri)", "Kütüphaneler (< 1.000 m²)", "Liman binaları ve marinalar", "Müstakil/ikiz konutlar (bağımsız bölüm < 200 m²)", "Sanayi tesisleri (501–3.000 kg/m²)", "Sanayi tesisleri idari binaları"],
+  "III.C": ["Ağız ve diş sağlığı merkezleri", "Emniyet ve jandarma karakol binaları", "Halk eğitim merkezleri", "Huzurevi, rehabilitasyon, yaşlı bakım", "İl tipi otobüs terminalleri", "İş merkezleri (≤ 21,50 m, 3 kat üzeri)", "Kaplıcalar, termal tesisler", "Konutlar (21,50 m–30,50 m arası)", "Lise ve dengi okul yapıları", "Müstakil/ikiz konutlar (bağımsız bölüm 200–500 m²)", "Öğrenci yurtları", "Tren gar/istasyon binaları (< 1.500 m²)"],
+  "IV.A":  ["Açık cezaevleri", "Alışveriş merkezleri (< 25.000 m²)", "AR-GE merkezleri, laboratuvarlar", "Enstitüler, fakülteler, yüksekokullar", "Fuar merkezleri", "İlçe tipi kamu binaları", "İş merkezleri (21,50–30,50 m arası)", "Kapalı spor salonları (1.000–5.000 seyirci)", "Konutlar (30,50–51,50 m arası)", "Oteller (1 ve 2 yıldızlı)", "Sanayi tesisleri (> 3.000 kg/m²)", "Tıp merkezleri", "Yüzme havuzu tesisleri"],
+  "IV.B":  ["Arşiv binaları", "Banka ve borsa binaları", "Büyük (merkez) postaneler", "Düğün salonları", "Fizik tedavi ve rehabilitasyon merkezleri", "İbadethaneler (500–1.500 kişi)", "İş merkezleri (30,50–51,50 m arası)", "Kapalı spor salonları (≥ 5.000 seyirci)", "Konutlar (yükseklik > 51,50 m)", "Müstakil/ikiz konutlar (bağımsız bölüm ≥ 500 m²)", "Radyo ve televizyon istasyon binaları", "Üniversite idari binaları"],
+  "IV.C":  ["Adalet sarayları", "Alışveriş merkezleri (≥ 25.000 m²)", "Bakanlık binaları", "Büyükşehir belediye hizmet binaları", "Hastaneler (< 200 yatak)", "İl tipi kamu binaları", "Kapalı cezaevleri", "Kütüphaneler (≥ 1.000 m²)", "Olimpik spor tesisleri", "Oteller (3 yıldızlı)", "Tatil köyleri", "Tren gar/istasyon binaları (≥ 1.500 m²)"],
+  "V.A":   ["Büyükelçilik ve konsolosluk binaları", "Eğitim ve araştırma hastaneleri", "İş merkezleri (yükseklik > 51,50 m)", "Karma kullanımlı yapılar (AVM + ofis/konut)", "Stadyumlar ve hipodromlar", "Üniversite kampüsleri"],
+  "V.B":   ["Deniz, hava ve kara kuvvetleri komutanlığı tesisleri", "Hastaneler (200–400 yatak)", "İbadethaneler (≥ 1.500 kişi)", "Jandarma ve sahil güvenlik komutanlığı tesisleri", "Oteller (4 yıldızlı)"],
+  "V.C":   ["Bale, opera ve tiyatro yapıları", "Hastaneler (≥ 400 yatak)", "Kongre ve/veya kültür merkezleri", "Müze yapıları", "Tarihi eser niteliğinde restore/aslına uygun yapılar"],
+  "V.D":   ["Havalimanı terminal binaları", "Metro istasyonları", "Oteller (5 yıldızlı)", "Şehir hastaneleri", "Yüksek güvenlikli cezaevleri"],
+  "V.E":   ["Rüzgâr enerji santralleri (RES)"],
+};
+
 // ── Calculation ───────────────────────────────────────────────────────────────
 
 interface CalcInputs {
@@ -220,12 +241,35 @@ function buildHeader(): string {
 </header>`;
 }
 
-function buildInputsCard(): string {
-  const classOptions = UNIT_COSTS.map(
-    (r) =>
-      `<option value="${r.cls}"${r.cls === inputs.buildingClass ? " selected" : ""}>${r.cls} — ${r.y2026.toLocaleString("tr-TR")} TL/m²</option>`
-  ).join("");
+function buildClassPickerHTML(): string {
+  const sel = UNIT_COSTS.find((r) => r.cls === inputs.buildingClass)!;
+  const btnLabel = `${sel.cls} — ${sel.y2026.toLocaleString("tr-TR")} TL/m²`;
+  const optRows = UNIT_COSTS.map((r) => {
+    const active = r.cls === inputs.buildingClass;
+    return `<div class="tgua-cls-option${active ? " tgua-cls-option-active" : ""}" role="option" data-cls="${r.cls}" aria-selected="${active}">
+      <span class="tgua-cls-opt-code">${r.cls}</span>
+      <span class="tgua-cls-opt-price">${r.y2026.toLocaleString("tr-TR")}</span>
+    </div>`;
+  }).join("");
+  const infoItems = (CLASS_INFO[inputs.buildingClass] ?? []).map((i) => `<li>${i}</li>`).join("");
+  return `<div class="tgua-cls-picker" id="tgua-cls-picker">
+  <button class="tgua-cls-btn" id="tgua-cls-btn" type="button" aria-haspopup="listbox" aria-expanded="false">
+    <span class="tgua-cls-btn-label" id="tgua-cls-btn-label">${btnLabel}</span>
+    <svg class="tgua-cls-chevron" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+      <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </button>
+  <div class="tgua-cls-panel" id="tgua-cls-panel" hidden role="listbox">
+    <div class="tgua-cls-list" id="tgua-cls-list">${optRows}</div>
+    <div class="tgua-cls-info" id="tgua-cls-info">
+      <div class="tgua-cls-info-header">${sel.cls} — ${sel.y2026.toLocaleString("tr-TR")} TL/m²</div>
+      <ul class="tgua-cls-info-list">${infoItems}</ul>
+    </div>
+  </div>
+</div>`;
+}
 
+function buildInputsCard(): string {
   return `
 <section class="tgua-card">
   <h2 class="tgua-card-title">${t("inputsTitle")}</h2>
@@ -238,8 +282,8 @@ function buildInputsCard(): string {
     <input class="tgua-input" type="number" id="inpArea" value="${inputs.area}" min="0" step="1" />
   </div>
   <div class="tgua-field">
-    <label class="tgua-label" for="inpClass">${t("buildingClassLabel")}</label>
-    <select class="tgua-input tgua-select" id="inpClass">${classOptions}</select>
+    <label class="tgua-label" for="tgua-cls-btn">${t("buildingClassLabel")}</label>
+    ${buildClassPickerHTML()}
   </div>
   <div class="tgua-field">
     <label class="tgua-label" for="inpAvgFloor">${t("avgFloorAreaLabel")}</label>
@@ -367,19 +411,80 @@ function wireEvents(): void {
 
   const onInputChange = (): void => {
     inputs = {
+      ...inputs,
       minWage:
         parseFloat((document.getElementById("inpMinWage") as HTMLInputElement).value) || 0,
       area: parseFloat((document.getElementById("inpArea") as HTMLInputElement).value) || 0,
-      buildingClass: (document.getElementById("inpClass") as HTMLSelectElement).value,
       avgFloorArea:
         parseFloat((document.getElementById("inpAvgFloor") as HTMLInputElement).value) || 0,
     };
     updateResults();
   };
 
-  for (const id of ["inpMinWage", "inpArea", "inpClass", "inpAvgFloor"]) {
+  for (const id of ["inpMinWage", "inpArea", "inpAvgFloor"]) {
     document.getElementById(id)?.addEventListener("input", onInputChange);
   }
+
+  wireClassPicker();
+}
+
+// ── Class Picker ──────────────────────────────────────────────────────────────
+
+function renderInfo(container: HTMLElement, cls: string): void {
+  const row = UNIT_COSTS.find((r) => r.cls === cls)!;
+  const items = CLASS_INFO[cls] ?? [];
+  container.innerHTML = `
+    <div class="tgua-cls-info-header">${cls} — ${row.y2026.toLocaleString("tr-TR")} TL/m²</div>
+    <ul class="tgua-cls-info-list">${items.map((i) => `<li>${i}</li>`).join("")}</ul>`;
+}
+
+function wireClassPicker(): void {
+  const picker = document.getElementById("tgua-cls-picker");
+  const btn    = document.getElementById("tgua-cls-btn");
+  const panel  = document.getElementById("tgua-cls-panel") as HTMLElement | null;
+  const list   = document.getElementById("tgua-cls-list");
+  const info   = document.getElementById("tgua-cls-info") as HTMLElement | null;
+  if (!picker || !btn || !panel || !list || !info) return;
+
+  const open  = () => { panel.hidden = false; btn.setAttribute("aria-expanded", "true"); };
+  const close = () => { panel.hidden = true;  btn.setAttribute("aria-expanded", "false"); };
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    panel.hidden ? open() : close();
+  });
+
+  list.addEventListener("mouseover", (e) => {
+    const opt = (e.target as HTMLElement).closest<HTMLElement>(".tgua-cls-option");
+    if (!opt) return;
+    list.querySelectorAll(".tgua-cls-option-hover").forEach((el) => el.classList.remove("tgua-cls-option-hover"));
+    opt.classList.add("tgua-cls-option-hover");
+    renderInfo(info, opt.dataset.cls!);
+  });
+
+  list.addEventListener("click", (e) => {
+    const opt = (e.target as HTMLElement).closest<HTMLElement>(".tgua-cls-option");
+    if (!opt) return;
+    const cls = opt.dataset.cls!;
+    inputs.buildingClass = cls;
+    const row = UNIT_COSTS.find((r) => r.cls === cls)!;
+    document.getElementById("tgua-cls-btn-label")!.textContent =
+      `${cls} — ${row.y2026.toLocaleString("tr-TR")} TL/m²`;
+    list.querySelectorAll(".tgua-cls-option-active").forEach((el) => el.classList.remove("tgua-cls-option-active"));
+    opt.classList.add("tgua-cls-option-active");
+    opt.setAttribute("aria-selected", "true");
+    renderInfo(info, cls);
+    close();
+    updateResults();
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!picker.contains(e.target as Node)) close();
+  }, { capture: true });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") close();
+  });
 }
 
 // ── Update & init ─────────────────────────────────────────────────────────────

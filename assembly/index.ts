@@ -869,22 +869,47 @@ function bisectCForP(
   esKn: f64,
   barArea: f64
 ): f64 {
-  let fLo = evalForceAtPhiC(nx, ny, cLo, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
-  let fHi = evalForceAtPhiC(nx, ny, cHi, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
-  if (fLo * fHi > 0.0) return -1.0;
-
+  let numSegments = 20;
+  let dc = (cHi - cLo) / <f64>numSegments;
+  
+  let validLo = cLo;
+  let validHi = cHi;
+  let found = false;
+  
+  let cPrev = cLo;
+  let fPrev = evalForceAtPhiC(nx, ny, cPrev, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
+  
+  for (let i = 1; i <= numSegments; i++) {
+    let cCurr = cLo + <f64>i * dc;
+    let fCurr = evalForceAtPhiC(nx, ny, cCurr, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
+    if (fPrev * fCurr <= 0.0) {
+      validLo = cPrev;
+      validHi = cCurr;
+      found = true;
+      break;
+    }
+    cPrev = cCurr;
+    fPrev = fCurr;
+  }
+  
+  if (!found) return -1.0;
+  
+  let fL = evalForceAtPhiC(nx, ny, validLo, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
+  let cA = validLo;
+  let cB = validHi;
+  
   for (let iter = 0; iter < 64; iter++) {
-    let cMid = 0.5 * (cLo + cHi);
+    let cMid = 0.5 * (cA + cB);
     let fMid = evalForceAtPhiC(nx, ny, cMid, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
     if (Math.abs(fMid) < 0.5) return cMid; // 0.5 kN tolerance
-    if (fLo * fMid <= 0.0) {
-      cHi = cMid;
+    if (fL * fMid <= 0.0) {
+      cB = cMid;
     } else {
-      cLo = cMid;
-      fLo = fMid;
+      cA = cMid;
+      fL = fMid;
     }
   }
-  return 0.5 * (cLo + cHi);
+  return 0.5 * (cA + cB);
 }
 
 /**

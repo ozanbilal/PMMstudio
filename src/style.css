@@ -1586,3 +1586,132 @@ tr.info td:nth-child(6) {
     gap: 6px;
   }
 }
+
+/* ── TGUA Class Picker ───────────────────────────────────────────────────────── */
+
+.tgua-cls-picker {
+  position: relative;
+}
+
+.tgua-cls-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--input-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 14px;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s;
+}
+
+.tgua-cls-btn:hover {
+  border-color: var(--line-strong);
+}
+
+.tgua-cls-chevron {
+  width: 10px;
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+
+.tgua-cls-btn[aria-expanded="true"] .tgua-cls-chevron {
+  transform: rotate(180deg);
+}
+
+.tgua-cls-panel[hidden] {
+  display: none;
+}
+
+.tgua-cls-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: max(100%, 520px);
+  display: flex;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+  z-index: 200;
+  overflow: hidden;
+}
+
+.tgua-cls-list {
+  flex-shrink: 0;
+  width: 148px;
+  overflow-y: auto;
+  max-height: 320px;
+  border-right: 1px solid var(--line);
+  padding: 6px 0;
+  scrollbar-width: thin;
+}
+
+.tgua-cls-option {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tgua-cls-option:hover,
+.tgua-cls-option-hover {
+  background: var(--panel-soft);
+}
+
+.tgua-cls-option-active .tgua-cls-opt-code {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.tgua-cls-opt-code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.tgua-cls-opt-price {
+  font-size: 10px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.tgua-cls-info {
+  flex: 1;
+  padding: 14px 16px;
+  overflow-y: auto;
+  max-height: 320px;
+  min-width: 0;
+  scrollbar-width: thin;
+}
+
+.tgua-cls-info-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 10px;
+  font-family: var(--font-mono);
+}
+
+.tgua-cls-info-list {
+  margin: 0;
+  padding-left: 16px;
+  list-style: disc;
+}
+
+.tgua-cls-info-list li {
+  font-size: 12px;
+  color: var(--text-soft, var(--muted));
+  line-height: 1.75;
+  padding: 1px 0;
+}

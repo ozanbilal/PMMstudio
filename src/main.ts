@@ -3237,7 +3237,7 @@ async function runMomentCurvature(): Promise<void> {
     if (tempEpsC[i] > epsCuCutoff && firstExceedIdx < 0) {
       firstExceedIdx = i;
       // Include a few points past εcu to show the knee
-      lastConcreteIdx = Math.min(count - 1, i + 3);
+      lastConcreteIdx = Math.min(count - 1, i + 10);
       break;
     }
   }
