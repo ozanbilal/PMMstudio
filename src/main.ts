@@ -496,6 +496,7 @@ L3,650,90,45</textarea>
             <span class="accordion-hint" data-i18n="accordionHint">Aç / Kapat</span>
           </summary>
           <div class="accordion-body">
+            <button id="mc-close-btn" class="mc-close-btn" type="button" aria-label="Kapat">✕</button>
             <p class="mc-intro" data-i18n="mcIntro">
               Verilen eksenel yük altında tek eksenli eğilme için M–φ eğrisi hesaplar.
               Önce PMM analizi çalıştırılmış olmalıdır.
@@ -521,6 +522,7 @@ L3,650,90,45</textarea>
             <div class="mc-plot-row">
               <div id="plot-mc" class="plot-mc"></div>
               <div id="plot-mc-strain" class="plot-mc-strain"></div>
+              <div id="mc-data-table" class="mc-data-table"></div>
             </div>
             <div id="mc-stats" class="mc-stats hidden"></div>
             <div id="mc-hover-info" class="mc-hover-info hidden">
@@ -692,6 +694,8 @@ const refs = {
   plotMc: must<HTMLDivElement>("plot-mc"),
   mcStats: must<HTMLDivElement>("mc-stats"),
   mcFullscreenBtn: must<HTMLButtonElement>("mc-fullscreen-btn"),
+  mcCloseBtn: must<HTMLButtonElement>("mc-close-btn"),
+  mcDataTable: must<HTMLDivElement>("mc-data-table"),
   mcCopyBtn: must<HTMLButtonElement>("mc-copy-btn"),
   mcExportBtn: must<HTMLButtonElement>("mc-export-btn"),
   plotMcStrain: must<HTMLDivElement>("plot-mc-strain"),
@@ -1284,6 +1288,7 @@ async function init(): Promise<void> {
   refs.exportReport.addEventListener("click", exportWordReport);
   refs.mcRunBtn.addEventListener("click", () => runMomentCurvature().catch(showError));
   refs.mcFullscreenBtn.addEventListener("click", toggleMcFullscreen);
+  refs.mcCloseBtn.addEventListener("click", closeMcFullscreen);
   refs.mcCopyBtn.addEventListener("click", () => copyMcData().catch(showError));
   refs.mcExportBtn.addEventListener("click", exportMcDataToCsv);
 
@@ -3452,6 +3457,38 @@ function renderMcPlot(data: McData): void {
     </div>
   `;
   statsDiv.classList.remove("hidden");
+
+  // Render data table
+  renderMcDataTable(data);
+}
+
+function renderMcDataTable(data: McData): void {
+  const container = refs.mcDataTable;
+  if (!container) return;
+  const rows = data.phi.map((phi, i) =>
+    `<tr>
+      <td>${i + 1}</td>
+      <td>${phi.toExponential(3)}</td>
+      <td>${data.moment[i].toFixed(1)}</td>
+      <td>${(data.neutralAxis[i] * 1000).toFixed(1)}</td>
+      <td>${data.epsC[i].toExponential(3)}</td>
+      <td>${data.epsS[i].toExponential(3)}</td>
+    </tr>`
+  ).join("");
+  container.innerHTML = `
+    <table class="mc-tbl">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>φ (1/m)</th>
+          <th>M (kNm)</th>
+          <th>NA (mm)</th>
+          <th>ε<sub>c</sub></th>
+          <th>ε<sub>s</sub></th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
 }
 
 function exportWordReport(): void {
@@ -3635,12 +3672,27 @@ function escapeHtml(v: string): string {
 function toggleMcFullscreen(): void {
   const acc = document.getElementById("mc-accordion");
   if (!acc) return;
-  acc.classList.toggle("mc-fullscreen");
+  const entering = !acc.classList.contains("mc-fullscreen");
+  acc.classList.toggle("mc-fullscreen", entering);
+  refs.mcCloseBtn.classList.toggle("mc-close-visible", entering);
   if (state.mcData) {
     setTimeout(() => {
       (Plotly as any).Plots.resize(refs.plotMc);
       (Plotly as any).Plots.resize(refs.plotMcStrain);
-    }, 50);
+    }, 80);
+  }
+}
+
+function closeMcFullscreen(): void {
+  const acc = document.getElementById("mc-accordion");
+  if (!acc) return;
+  acc.classList.remove("mc-fullscreen");
+  refs.mcCloseBtn.classList.remove("mc-close-visible");
+  if (state.mcData) {
+    setTimeout(() => {
+      (Plotly as any).Plots.resize(refs.plotMc);
+      (Plotly as any).Plots.resize(refs.plotMcStrain);
+    }, 80);
   }
 }
 
