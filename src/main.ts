@@ -177,7 +177,6 @@ app.innerHTML = `
             </select>
           </label>
         </div>
-        <a href="/tgua.html" class="tgua-hero-link" data-i18n="tguaLink">TGUA Maliyet Hesap →</a>
       </div>
 
       <svg class="hero-pmm" viewBox="0 0 1200 120" preserveAspectRatio="none" aria-hidden="true" focusable="false">
@@ -753,7 +752,6 @@ const I18N = {
     labelTheme: "Tema",
     optThemeDark: "Karanlık",
     optThemeLight: "Aydınlık",
-    tguaLink: "TGUA Maliyet Hesap →",
     headingRunLog: "Çalışma Günlüğü",
     statusLogEmpty: "Henüz kayıt yok.",
     labelCodeMode: "Kod Modu",
@@ -912,7 +910,6 @@ const I18N = {
     labelTheme: "Theme",
     optThemeDark: "Dark",
     optThemeLight: "Light",
-    tguaLink: "TGUA Cost Calculator →",
     headingRunLog: "Run Log",
     statusLogEmpty: "No logs yet.",
     labelCodeMode: "Code Mode",

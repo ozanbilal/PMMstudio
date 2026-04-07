@@ -209,26 +209,6 @@ h2 {
   min-width: min(320px, 100%);
 }
 
-.tgua-hero-link {
-  display: inline-block;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--muted);
-  text-decoration: none;
-  padding: 5px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--panel-soft);
-  transition: color 0.15s, border-color 0.15s;
-  white-space: nowrap;
-  justify-self: end;
-}
-
-.tgua-hero-link:hover {
-  color: var(--text);
-  border-color: var(--line-strong);
-}
-
 .hero-controls {
   display: inline-flex;
   align-items: flex-start;
@@ -1261,18 +1241,6 @@ tr.info td:nth-child(6) {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
-}
-
-.tgua-back-link {
-  color: var(--muted);
-  font-size: 13px;
-  text-decoration: none;
-  white-space: nowrap;
-  transition: color 0.15s;
-}
-
-.tgua-back-link:hover {
-  color: var(--text);
 }
 
 .tgua-title {

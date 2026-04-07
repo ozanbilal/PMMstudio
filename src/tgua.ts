@@ -8,7 +8,6 @@ type ThemeMode = "dark" | "light";
 const i18nTr: Record<string, string> = {
   pageTitle: "TGUA Maliyet Hesap",
   pageSubtitle: "Mimarlık Hizmet Bedeli Hesaplayıcısı",
-  backLink: "← PMM Studio",
   inputsTitle: "Proje Girdileri",
   minWageLabel: "Aylık Asgari Brüt Ücret (₺)",
   areaLabel: "Proje İnşaat Alanı (m²)",
@@ -40,7 +39,6 @@ const i18nTr: Record<string, string> = {
 const i18nEn: Record<string, string> = {
   pageTitle: "TGUA Cost Calculator",
   pageSubtitle: "Architecture Service Fee Calculator",
-  backLink: "← PMM Studio",
   inputsTitle: "Project Inputs",
   minWageLabel: "Monthly Gross Minimum Wage (₺)",
   areaLabel: "Project Construction Area (m²)",
@@ -210,7 +208,6 @@ function buildHeader(): string {
   return `
 <header class="tgua-header">
   <div class="tgua-header-left">
-    <a href="/" class="tgua-back-link">${t("backLink")}</a>
     <div>
       <h1 class="tgua-title">${t("pageTitle")}</h1>
       <p class="tgua-subtitle">${t("pageSubtitle")}</p>
@@ -253,7 +250,7 @@ function buildInputsCard(): string {
 
 function buildReferenceCard(r: CalcResults): string {
   return `
-<section class="tgua-card">
+<section class="tgua-card" id="tgua-ref-card">
   <h2 class="tgua-card-title">${t("referenceTitle")}</h2>
   <div class="tgua-result-row">
     <span class="tgua-result-label">${t("unitCostLabel")}</span>
@@ -291,7 +288,7 @@ function buildFeesCard(r: CalcResults): string {
     .join("");
 
   return `
-<section class="tgua-card">
+<section class="tgua-card" id="tgua-fees-card">
   <h2 class="tgua-card-title">${t("feesTitle")}</h2>
   ${rows}
 </section>`;
@@ -300,7 +297,7 @@ function buildFeesCard(r: CalcResults): string {
 function buildRefTableCard(): string {
   const rows = UNIT_COSTS.map((r) => {
     const active = r.cls === inputs.buildingClass;
-    return `<tr class="${active ? "tgua-ref-active" : ""}">
+    return `<tr class="${active ? "tgua-ref-active" : ""}" data-class="${r.cls}">
       <td>${r.cls}</td>
       <td>${r.y2026.toLocaleString("tr-TR")}</td>
       <td>${r.y2025.toLocaleString("tr-TR")}</td>
@@ -322,7 +319,7 @@ function buildRefTableCard(): string {
         <th>${t("col2023")}</th>
       </tr>
     </thead>
-    <tbody>${rows}</tbody>
+    <tbody id="tgua-ref-tbody">${rows}</tbody>
   </table>
 </section>`;
 }
@@ -377,7 +374,7 @@ function wireEvents(): void {
       avgFloorArea:
         parseFloat((document.getElementById("inpAvgFloor") as HTMLInputElement).value) || 0,
     };
-    update();
+    updateResults();
   };
 
   for (const id of ["inpMinWage", "inpArea", "inpClass", "inpAvgFloor"]) {
@@ -387,24 +384,31 @@ function wireEvents(): void {
 
 // ── Update & init ─────────────────────────────────────────────────────────────
 
-function update(): void {
-  const focused = document.activeElement as HTMLInputElement | null;
-  const focusedId = focused?.id ?? null;
-  const selStart = focused?.selectionStart ?? null;
-  const selEnd = focused?.selectionEnd ?? null;
+function updateResults(): void {
+  const r = calculate(inputs);
 
+  const refEl = document.getElementById("tgua-ref-card");
+  if (refEl) {
+    const tmp = document.createElement("div");
+    tmp.innerHTML = buildReferenceCard(r);
+    refEl.replaceWith(tmp.firstElementChild!);
+  }
+
+  const feesEl = document.getElementById("tgua-fees-card");
+  if (feesEl) {
+    const tmp = document.createElement("div");
+    tmp.innerHTML = buildFeesCard(r);
+    feesEl.replaceWith(tmp.firstElementChild!);
+  }
+
+  document.querySelectorAll<HTMLElement>("#tgua-ref-tbody tr[data-class]").forEach((el) => {
+    el.classList.toggle("tgua-ref-active", el.dataset.class === inputs.buildingClass);
+  });
+}
+
+function update(): void {
   document.getElementById("app")!.innerHTML = buildPage();
   wireEvents();
-
-  if (focusedId) {
-    const el = document.getElementById(focusedId) as HTMLInputElement | null;
-    if (el) {
-      el.focus();
-      if (selStart !== null && selEnd !== null && typeof el.setSelectionRange === "function") {
-        el.setSelectionRange(selStart, selEnd);
-      }
-    }
-  }
 }
 
 document.documentElement.setAttribute("data-theme", "dark");
