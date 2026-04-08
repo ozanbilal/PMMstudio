@@ -900,6 +900,7 @@ const I18N = {
     mcStatsPhiY: "φy (bilineer)",
     mcStatsDuctility: "μφ = φu/φy",
     btnMcFullscreen: "Büyüt",
+    btnMcCollapse: "Küçült",
     btnMcCopy: "Veriyi Kopyala",
     btnMcExport: "Excel (CSV)",
     statusMcCopied: "M-φ verileri panoya kopyalandı.",
@@ -1058,6 +1059,7 @@ const I18N = {
     mcStatsPhiY: "φy (bilinear)",
     mcStatsDuctility: "μφ = φu/φy",
     btnMcFullscreen: "Expand",
+    btnMcCollapse: "Collapse",
     btnMcCopy: "Copy Data",
     btnMcExport: "Excel (CSV)",
     statusMcCopied: "M-φ data copied to clipboard.",
@@ -1164,6 +1166,7 @@ function applyLocale(): void {
   }
   render3dSliceTable(state.surface);
   renderSectionPreview();
+  updateMcFullscreenButtonLabel();
 }
 
 function applyTheme(theme: ThemeMode): void {
@@ -1291,6 +1294,7 @@ async function init(): Promise<void> {
   refs.mcCloseBtn.addEventListener("click", closeMcFullscreen);
   refs.mcCopyBtn.addEventListener("click", () => copyMcData().catch(showError));
   refs.mcExportBtn.addEventListener("click", exportMcDataToCsv);
+  window.addEventListener("resize", () => resizeMcPlotsDeferred(140));
 
   setStatus(tx("statusWasmLoading"), "info");
   state.wasm = await loadWasm();
@@ -3391,6 +3395,7 @@ function renderMcPlot(data: McData): void {
   const layout = {
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: sceneBg,
+    height: mcPlotHeightPx(),
     margin: { l: 72, r: 28, t: 32, b: 64 },
     xaxis: {
       title: { text: phiLabel, font: { color: textColor } },
@@ -3669,18 +3674,53 @@ function escapeHtml(v: string): string {
   });
 }
 
+let mcResizeToken = 0;
+
+function mcPlotHeightPx(): number {
+  const acc = document.getElementById("mc-accordion");
+  const isFullscreen = !!acc?.classList.contains("mc-fullscreen");
+  const vh = window.innerHeight || 900;
+  return isFullscreen
+    ? clamp(Math.round(vh * 0.58), 360, 720)
+    : clamp(Math.round(vh * 0.34), 320, 460);
+}
+
+function updateMcFullscreenButtonLabel(): void {
+  const acc = document.getElementById("mc-accordion");
+  const expanded = !!acc?.classList.contains("mc-fullscreen");
+  refs.mcFullscreenBtn.textContent = expanded ? tx("btnMcCollapse") : tx("btnMcFullscreen");
+}
+
+function resizeMcPlotsDeferred(delayMs = 80): void {
+  if (!state.mcData || state.mcData.phi.length === 0) return;
+  mcResizeToken += 1;
+  const token = mcResizeToken;
+  window.setTimeout(() => {
+    if (token !== mcResizeToken) return;
+    const targetHeight = mcPlotHeightPx();
+    try {
+      (Plotly as any).relayout(refs.plotMc, { height: targetHeight });
+      (Plotly as any).relayout(refs.plotMcStrain, { height: targetHeight });
+      (Plotly as any).Plots.resize(refs.plotMc);
+      (Plotly as any).Plots.resize(refs.plotMcStrain);
+    } catch {
+      // Plot containers may not be ready yet during early layout transitions.
+    }
+  }, delayMs);
+}
+
 function toggleMcFullscreen(): void {
   const acc = document.getElementById("mc-accordion");
   if (!acc) return;
   const entering = !acc.classList.contains("mc-fullscreen");
   acc.classList.toggle("mc-fullscreen", entering);
   refs.mcCloseBtn.classList.toggle("mc-close-visible", entering);
-  if (state.mcData) {
-    setTimeout(() => {
-      (Plotly as any).Plots.resize(refs.plotMc);
-      (Plotly as any).Plots.resize(refs.plotMcStrain);
-    }, 80);
+  if (entering) {
+    const body = acc.querySelector<HTMLElement>(".accordion-body");
+    if (body) body.scrollTop = 0;
   }
+  updateMcFullscreenButtonLabel();
+  resizeMcPlotsDeferred(90);
 }
 
 function closeMcFullscreen(): void {
@@ -3688,12 +3728,8 @@ function closeMcFullscreen(): void {
   if (!acc) return;
   acc.classList.remove("mc-fullscreen");
   refs.mcCloseBtn.classList.remove("mc-close-visible");
-  if (state.mcData) {
-    setTimeout(() => {
-      (Plotly as any).Plots.resize(refs.plotMc);
-      (Plotly as any).Plots.resize(refs.plotMcStrain);
-    }, 80);
-  }
+  updateMcFullscreenButtonLabel();
+  resizeMcPlotsDeferred(90);
 }
 
 function mcClipboardText(data: McData): string {
@@ -3805,7 +3841,8 @@ function renderStrainDiagram(data: McData, idx: number): void {
   const layout = {
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: sceneBg,
-    margin: { l: 60, r: 20, t: 32, b: 56 },
+    height: mcPlotHeightPx(),
+    margin: { l: 60, r: 20, t: 66, b: 56 },
     title: {
       text: state.lang === "en" ? "Strain Diagram" : "Birim Uzama Diyagramı",
       font: { color: textColor, size: 13 },
@@ -3826,6 +3863,11 @@ function renderStrainDiagram(data: McData, idx: number): void {
     legend: {
       font: { color: textColor, size: 10 },
       bgcolor: "rgba(0,0,0,0)",
+      orientation: "h" as const,
+      x: 0.5,
+      xanchor: "center" as const,
+      y: 1.08,
+      yanchor: "bottom" as const,
     },
     font: { color: textColor },
     showlegend: true,

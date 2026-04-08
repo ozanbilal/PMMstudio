@@ -1482,41 +1482,49 @@ tr.info td:nth-child(6) {
   gap: 10px;
   margin-top: 14px;
   justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 /* Side-by-side plot row */
 .mc-plot-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(320px, 1.3fr) minmax(340px, 1.3fr);
   gap: 12px;
   min-height: 340px;
+  align-items: stretch;
 }
 
 .mc-plot-row .plot-mc {
-  flex: 2;
+  width: 100%;
+  height: clamp(320px, 38vh, 420px);
   min-height: 320px;
   min-width: 0;
+  margin-bottom: 0;
 }
 
 .mc-plot-row .plot-mc-strain {
-  flex: 1;
+  width: 100%;
+  height: clamp(320px, 38vh, 420px);
   min-height: 320px;
-  min-width: 200px;
+  min-width: 0;
 }
 
 /* Data table beside strain diagram */
 .mc-data-table {
-  flex: 0 0 220px;
-  min-width: 0;
-  overflow-y: auto;
-  max-height: 340px;
+  width: 100%;
+  min-width: 320px;
+  max-width: 100%;
+  overflow: auto;
+  max-height: clamp(320px, 38vh, 420px);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  font-size: 11px;
+  font-size: 12px;
   scrollbar-width: thin;
 }
 
 .mc-tbl {
   width: 100%;
+  min-width: 420px;
   border-collapse: collapse;
   font-family: var(--font-mono);
 }
@@ -1621,7 +1629,7 @@ tr.info td:nth-child(6) {
   background: var(--panel) !important;
   border-radius: 0 !important;
   box-shadow: none !important;
-  padding: 16px 20px 16px 20px !important;
+  padding: 14px 18px !important;
   display: flex !important;
   flex-direction: column;
   overflow: hidden;
@@ -1641,41 +1649,105 @@ tr.info td:nth-child(6) {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   min-height: 0;
   position: relative;
+  gap: 10px;
+  padding-right: 6px;
 }
 
 .mc-fullscreen .mc-plot-row {
-  flex: 1;
-  min-height: 0;
+  flex: 0 0 auto;
+  grid-template-columns: minmax(0, 1.9fr) minmax(400px, 1.35fr) minmax(360px, 1.15fr);
+  min-height: clamp(360px, 52vh, 680px);
+  max-height: clamp(360px, 58vh, 720px);
 }
 
 .mc-fullscreen .mc-plot-row .plot-mc {
-  flex: 2;
+  height: clamp(360px, 58vh, 720px);
+  max-height: clamp(360px, 58vh, 720px);
   min-height: 0;
 }
 
 .mc-fullscreen .mc-plot-row .plot-mc-strain {
-  flex: 1;
+  height: clamp(360px, 58vh, 720px);
+  max-height: clamp(360px, 58vh, 720px);
   min-height: 0;
 }
 
 .mc-fullscreen .mc-data-table {
   max-height: none;
-  flex: 0 0 240px;
+  height: clamp(360px, 58vh, 720px);
+  max-height: clamp(360px, 58vh, 720px);
+  min-width: clamp(360px, 22vw, 460px);
   min-height: 0;
 }
 
 .mc-fullscreen .mc-controls,
 .mc-fullscreen .mc-intro,
-.mc-fullscreen .mc-angle-hint {
+.mc-fullscreen .mc-angle-hint,
+.mc-fullscreen .mc-stats,
+.mc-fullscreen .mc-hover-info {
   flex-shrink: 0;
+}
+
+.mc-fullscreen .mc-actions {
+  margin-top: 8px;
+  padding-top: 10px;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  border-top: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--panel) 35%, transparent),
+    color-mix(in srgb, var(--panel) 96%, transparent)
+  );
+}
+
+@media (max-width: 1320px) {
+  .mc-plot-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "curve curve"
+      "strain table";
+  }
+
+  .mc-plot-row .plot-mc {
+    grid-area: curve;
+    height: 360px;
+  }
+
+  .mc-plot-row .plot-mc-strain {
+    grid-area: strain;
+  }
+
+  .mc-data-table {
+    grid-area: table;
+    min-width: 0;
+  }
 }
 
 @media (max-width: 780px) {
   .mc-plot-row {
-    flex-direction: column;
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "curve"
+      "strain"
+      "table";
+    min-height: 0;
+  }
+
+  .mc-plot-row .plot-mc,
+  .mc-plot-row .plot-mc-strain,
+  .mc-data-table {
+    height: 300px;
+    min-height: 300px;
+  }
+
+  .mc-actions {
+    justify-content: flex-start;
   }
 
   .mc-hover-info {
