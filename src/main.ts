@@ -87,6 +87,24 @@ interface LoadCase {
   muy: number;
 }
 
+interface SectionDef {
+  id: number;
+  name: string;
+  shape: Shape;
+  width: string;
+  height: string;
+  diameter: string;
+  barsX: string;
+  barsY: string;
+  bars: string;
+  cover: string;
+  tieDia: string;
+  barDia: string;
+  tieSpacingConf: string;
+  tieSpacingMid: string;
+  coverToCenter: boolean;
+}
+
 type LoadSheetCol = "name" | "pu" | "mux" | "muy";
 
 interface LoadSheetRow {
@@ -196,6 +214,7 @@ interface ProjectFileV1 {
   version: 1;
   savedAt: string;
   input: ProjectInputState;
+  sections?: SectionDef[];
   loadSheet: LoadSheetRow[];
   report: ProjectReportState;
 }
@@ -374,14 +393,6 @@ app.innerHTML = `
               </label>
 
               <label>
-                <span data-i18n="labelShape">Kesit Tipi</span>
-                <select id="shape">
-                  <option value="rect" data-i18n="optShapeRect">Dörtgen</option>
-                  <option value="circle" data-i18n="optShapeCircle">Dairesel</option>
-                </select>
-              </label>
-
-              <label>
                 <span data-i18n="labelConcreteModel">Beton modeli</span>
                 <select id="concrete-model">
                   <option value="ts500_block" data-i18n="optConcreteTs500Block">TS500 eşdeğer blok</option>
@@ -394,62 +405,73 @@ app.innerHTML = `
           <section class="input-group input-group--section">
             <div class="input-group-head">
               <h3 data-i18n="headingGroupSection">Kesit ve Donatı</h3>
+              <button id="section-add-btn" type="button" class="action-btn-lite" data-i18n="btnSectionAdd">+ Kesit Ekle</button>
             </div>
-            <div class="grid controls-grid controls-grid--section">
-              <label id="field-width">
-                <span data-i18n="labelWidth">Genişlik b (m)</span>
-                <input id="width" type="number" value="0.40" min="0.01" step="0.01" />
-              </label>
-              <label id="field-height">
-                <span data-i18n="labelHeight">Yükseklik h (m)</span>
-                <input id="height" type="number" value="0.60" min="0.01" step="0.01" />
-              </label>
+            <div id="section-strip" class="section-strip"></div>
+            <div id="section-form-body">
+              <div class="grid controls-grid controls-grid--section">
+                <label>
+                  <span data-i18n="labelShape">Kesit Tipi</span>
+                  <select id="shape">
+                    <option value="rect" data-i18n="optShapeRect">Dörtgen</option>
+                    <option value="circle" data-i18n="optShapeCircle">Dairesel</option>
+                  </select>
+                </label>
+                <label id="field-width">
+                  <span data-i18n="labelWidth">Genişlik b (m)</span>
+                  <input id="width" type="number" value="0.40" min="0.01" step="0.01" />
+                </label>
+                <label id="field-height">
+                  <span data-i18n="labelHeight">Yükseklik h (m)</span>
+                  <input id="height" type="number" value="0.60" min="0.01" step="0.01" />
+                </label>
 
-              <label id="field-diameter" class="hidden">
-                <span data-i18n="labelDiameter">Çap D (m)</span>
-                <input id="diameter" type="number" value="0.60" min="0.01" step="0.01" />
-              </label>
+                <label id="field-diameter" class="hidden">
+                  <span data-i18n="labelDiameter">Çap D (m)</span>
+                  <input id="diameter" type="number" value="0.60" min="0.01" step="0.01" />
+                </label>
 
-              <label id="field-bars-x">
-                <span data-i18n="labelBarsX">Üst/alt bar adedi</span>
-                <input id="bars-x" type="number" value="4" min="2" step="1" />
-              </label>
-              <label id="field-bars-y">
-                <span data-i18n="labelBarsY">Sol/sağ bar adedi</span>
-                <input id="bars-y" type="number" value="4" min="2" step="1" />
-              </label>
-              <label id="field-bars" class="hidden">
-                <span data-i18n="labelBars">Dairesel toplam bar</span>
-                <input id="bars" type="number" value="12" min="3" step="1" />
-              </label>
+                <label id="field-bars-x">
+                  <span data-i18n="labelBarsX">Üst/alt bar adedi</span>
+                  <input id="bars-x" type="number" value="4" min="2" step="1" />
+                </label>
+                <label id="field-bars-y">
+                  <span data-i18n="labelBarsY">Sol/sağ bar adedi</span>
+                  <input id="bars-y" type="number" value="4" min="2" step="1" />
+                </label>
+                <label id="field-bars" class="hidden">
+                  <span data-i18n="labelBars">Dairesel toplam bar</span>
+                  <input id="bars" type="number" value="12" min="3" step="1" />
+                </label>
 
-              <label>
-                <span data-i18n="labelCover">Cover (m)</span>
-                <input id="cover" type="number" value="0.04" min="0.005" step="any" />
-              </label>
-              <label>
-                <span data-i18n="labelTieDia">Etriye çapı (mm)</span>
-                <input id="tie-dia" type="number" value="10" min="4" step="1" />
-              </label>
-              <label>
-                <span data-i18n="labelBarDia">Boyuna donatı çapı (mm)</span>
-                <input id="bar-dia" type="number" value="16" min="6" step="1" />
-              </label>
+                <label>
+                  <span data-i18n="labelCover">Cover (m)</span>
+                  <input id="cover" type="number" value="0.04" min="0.005" step="any" />
+                </label>
+                <label>
+                  <span data-i18n="labelTieDia">Etriye çapı (mm)</span>
+                  <input id="tie-dia" type="number" value="10" min="4" step="1" />
+                </label>
+                <label>
+                  <span data-i18n="labelBarDia">Boyuna donatı çapı (mm)</span>
+                  <input id="bar-dia" type="number" value="16" min="6" step="1" />
+                </label>
 
-              <label>
-                <span data-i18n="labelTieSpacingConf">Sarılma bölgesi etriye aralığı s_conf (mm)</span>
-                <input id="tie-spacing-conf" type="number" value="100" min="30" step="5" />
-              </label>
-              <label>
-                <span data-i18n="labelTieSpacingMid">Orta bölge etriye aralığı s_mid (mm)</span>
-                <input id="tie-spacing-mid" type="number" value="150" min="30" step="5" />
+                <label>
+                  <span data-i18n="labelTieSpacingConf">Sarılma bölgesi etriye aralığı s_conf (mm)</span>
+                  <input id="tie-spacing-conf" type="number" value="100" min="30" step="5" />
+                </label>
+                <label>
+                  <span data-i18n="labelTieSpacingMid">Orta bölge etriye aralığı s_mid (mm)</span>
+                  <input id="tie-spacing-mid" type="number" value="150" min="30" step="5" />
+                </label>
+              </div>
+
+              <label class="checkbox">
+                <input id="cover-to-center" type="checkbox" />
+                <span data-i18n="labelCoverToCenter">Cover değeri donatı merkezine kadar verildi</span>
               </label>
             </div>
-
-            <label class="checkbox">
-              <input id="cover-to-center" type="checkbox" />
-              <span data-i18n="labelCoverToCenter">Cover değeri donatı merkezine kadar verildi</span>
-            </label>
           </section>
 
           <section class="input-group input-group--analysis">
@@ -855,6 +877,9 @@ L3,650,90,45</textarea>
 const refs = {
   workspace: must<HTMLElement>("workspace-main"),
   controlsAccordion: must<HTMLDetailsElement>("controls-accordion"),
+  sectionStrip: must<HTMLDivElement>("section-strip"),
+  sectionFormBody: must<HTMLDivElement>("section-form-body"),
+  sectionAddBtn: must<HTMLButtonElement>("section-add-btn"),
   langToggle: must<HTMLButtonElement>("lang-toggle"),
   themeToggle: must<HTMLButtonElement>("theme-toggle"),
   codeMode: must<HTMLSelectElement>("code-mode"),
@@ -1002,6 +1027,10 @@ const state: {
   loadMouseSelecting: boolean;
   reportLogoDataUrl: string;
   showNominalSurface: boolean;
+  sections: SectionDef[];
+  activeSectionIdx: number;
+  sectionIdCounter: number;
+  sectionFormExpanded: boolean;
 } = {
   wasm: null,
   results: [],
@@ -1027,6 +1056,10 @@ const state: {
   loadMouseSelecting: false,
   reportLogoDataUrl: "",
   showNominalSurface: false,
+  sections: [],
+  activeSectionIdx: 0,
+  sectionIdCounter: 0,
+  sectionFormExpanded: true,
 };
 
 const I18N = {
@@ -1123,6 +1156,7 @@ const I18N = {
     labelReportSecCompliance: "Kod Uyumluluk Kontrolü",
     labelReportSecMphi: "Moment-Eğrilik",
     labelReportSecAppendix: "Ekler (Mx/My Zarf)",
+    btnSectionAdd: "+ Kesit Ekle",
     btnProjectOpen: "PMM Aç",
     btnProjectSave: "PMM Kaydet",
     btnRun: "PMM Hesapla",
@@ -1330,6 +1364,7 @@ const I18N = {
     labelReportSecCompliance: "Code Compliance",
     labelReportSecMphi: "Moment-Curvature",
     labelReportSecAppendix: "Appendix (Mx/My Envelope)",
+    btnSectionAdd: "+ Add Section",
     btnProjectOpen: "Open PMM",
     btnProjectSave: "Save PMM",
     btnRun: "Run PMM",
@@ -1679,12 +1714,21 @@ async function init(): Promise<void> {
   applyLocale();
   syncLoadsTextareaFromSheet();
   renderLoadSheetGrid();
+
+  // Initialize default section from form defaults
+  state.sectionIdCounter = 1;
+  state.sections = [defaultSection(1, "S1")];
+  state.activeSectionIdx = 0;
+  state.sectionFormExpanded = true;
+  renderSectionStrip();
+
   bindShapeVisibility();
   bindExpectedStrengthVisibility();
   applyCodeModePreset(false);
   bindSectionPreviewListeners();
   renderSectionPreview();
   refs.shape.addEventListener("change", bindShapeVisibility);
+  refs.sectionAddBtn.addEventListener("click", addSection);
   refs.codeMode.addEventListener("change", () => {
     localStorage.setItem("pmm-code-mode", refs.codeMode.value);
     applyCodeModePreset(true);
@@ -1809,6 +1853,167 @@ async function init(): Promise<void> {
   setStatus(tx("statusWasmReady"), "info");
 }
 
+function defaultSection(id: number, name: string): SectionDef {
+  return {
+    id, name,
+    shape: "rect",
+    width: "0.40", height: "0.60", diameter: "0.60",
+    barsX: "4", barsY: "4", bars: "12",
+    cover: "0.04", tieDia: "10", barDia: "16",
+    tieSpacingConf: "100", tieSpacingMid: "150",
+    coverToCenter: false,
+  };
+}
+
+function sectionSummaryText(sec: SectionDef): string {
+  if (sec.shape === "rect") {
+    const w = (parseFloat(sec.width) * 100).toFixed(0);
+    const h = (parseFloat(sec.height) * 100).toFixed(0);
+    return `${w}×${h} cm`;
+  }
+  const d = (parseFloat(sec.diameter) * 100).toFixed(0);
+  return `D${d} cm`;
+}
+
+function sectionRebarSummary(sec: SectionDef): string {
+  const nBars = sec.shape === "rect"
+    ? 2 * parseInt(sec.barsX) + 2 * Math.max(0, parseInt(sec.barsY) - 2)
+    : parseInt(sec.bars);
+  return `${isNaN(nBars) ? "?" : nBars}\u03C6${sec.barDia}`;
+}
+
+function syncSectionFormToState(): void {
+  const sec = state.sections[state.activeSectionIdx];
+  if (!sec) return;
+  sec.shape = refs.shape.value as Shape;
+  sec.width = refs.width.value;
+  sec.height = refs.height.value;
+  sec.diameter = refs.diameter.value;
+  sec.barsX = refs.barsX.value;
+  sec.barsY = refs.barsY.value;
+  sec.bars = refs.bars.value;
+  sec.cover = refs.cover.value;
+  sec.tieDia = refs.tieDia.value;
+  sec.barDia = refs.barDia.value;
+  sec.tieSpacingConf = refs.tieSpacingConf.value;
+  sec.tieSpacingMid = refs.tieSpacingMid.value;
+  sec.coverToCenter = refs.coverToCenter.checked;
+}
+
+function loadSectionToForm(idx: number): void {
+  const sec = state.sections[idx];
+  if (!sec) return;
+  refs.shape.value = sec.shape;
+  refs.width.value = sec.width;
+  refs.height.value = sec.height;
+  refs.diameter.value = sec.diameter;
+  refs.barsX.value = sec.barsX;
+  refs.barsY.value = sec.barsY;
+  refs.bars.value = sec.bars;
+  refs.cover.value = sec.cover;
+  refs.tieDia.value = sec.tieDia;
+  refs.barDia.value = sec.barDia;
+  refs.tieSpacingConf.value = sec.tieSpacingConf;
+  refs.tieSpacingMid.value = sec.tieSpacingMid;
+  refs.coverToCenter.checked = sec.coverToCenter;
+  bindShapeVisibility();
+  renderSectionPreview();
+}
+
+function switchSection(idx: number): void {
+  if (idx === state.activeSectionIdx) {
+    state.sectionFormExpanded = !state.sectionFormExpanded;
+    refs.sectionFormBody.classList.toggle("hidden", !state.sectionFormExpanded);
+    renderSectionStrip();
+    return;
+  }
+  syncSectionFormToState();
+  state.activeSectionIdx = idx;
+  state.sectionFormExpanded = true;
+  refs.sectionFormBody.classList.remove("hidden");
+  loadSectionToForm(idx);
+  renderSectionStrip();
+}
+
+function addSection(): void {
+  syncSectionFormToState();
+  state.sectionIdCounter++;
+  const name = `S${state.sections.length + 1}`;
+  state.sections.push(defaultSection(state.sectionIdCounter, name));
+  state.activeSectionIdx = state.sections.length - 1;
+  state.sectionFormExpanded = true;
+  refs.sectionFormBody.classList.remove("hidden");
+  loadSectionToForm(state.activeSectionIdx);
+  renderSectionStrip();
+}
+
+function removeSection(idx: number): void {
+  if (state.sections.length <= 1) return;
+  state.sections.splice(idx, 1);
+  state.sections.forEach((sec, i) => { sec.name = `S${i + 1}`; });
+  if (state.activeSectionIdx >= state.sections.length) {
+    state.activeSectionIdx = state.sections.length - 1;
+  }
+  loadSectionToForm(state.activeSectionIdx);
+  renderSectionStrip();
+}
+
+function renderSectionStrip(): void {
+  const container = refs.sectionStrip;
+  container.innerHTML = "";
+
+  for (let i = 0; i < state.sections.length; i++) {
+    const sec = state.sections[i];
+    const isActive = i === state.activeSectionIdx;
+
+    const card = document.createElement("div");
+    card.className = `section-strip-card${isActive ? " active" : ""}`;
+    card.dataset.idx = String(i);
+
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "section-strip-name";
+    nameSpan.textContent = sec.name;
+
+    const shapeLabel = sec.shape === "rect" ? tx("optShapeRect") : tx("optShapeCircle");
+    const summarySpan = document.createElement("span");
+    summarySpan.className = "section-strip-summary";
+    summarySpan.textContent = `${shapeLabel} ${sectionSummaryText(sec)} · ${sectionRebarSummary(sec)}`;
+
+    const chevron = document.createElement("span");
+    chevron.className = "section-strip-chevron";
+    chevron.textContent = isActive && state.sectionFormExpanded ? "\u25B4" : "\u25BE";
+
+    card.appendChild(nameSpan);
+    card.appendChild(summarySpan);
+
+    if (state.sections.length > 1) {
+      const delBtn = document.createElement("button");
+      delBtn.className = "section-strip-del";
+      delBtn.type = "button";
+      delBtn.textContent = "\u00D7";
+      delBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        removeSection(i);
+      });
+      card.appendChild(delBtn);
+    }
+
+    card.appendChild(chevron);
+    card.addEventListener("click", () => switchSection(i));
+    container.appendChild(card);
+  }
+}
+
+function updateActiveSectionStripSummary(): void {
+  const card = refs.sectionStrip.querySelector(`.section-strip-card[data-idx="${state.activeSectionIdx}"]`);
+  if (!card) return;
+  const summaryEl = card.querySelector(".section-strip-summary");
+  if (!summaryEl) return;
+  const sec = state.sections[state.activeSectionIdx];
+  const shapeLabel = sec.shape === "rect" ? tx("optShapeRect") : tx("optShapeCircle");
+  summaryEl.textContent = `${shapeLabel} ${sectionSummaryText(sec)} · ${sectionRebarSummary(sec)}`;
+}
+
 function bindShapeVisibility(): void {
   const shape = refs.shape.value as Shape;
   const rect = shape === "rect";
@@ -1867,8 +2072,16 @@ function bindSectionPreviewListeners(): void {
   ];
 
   for (const el of ids) {
-    el.addEventListener("input", () => renderSectionPreview());
-    el.addEventListener("change", () => renderSectionPreview());
+    el.addEventListener("input", () => {
+      syncSectionFormToState();
+      updateActiveSectionStripSummary();
+      renderSectionPreview();
+    });
+    el.addEventListener("change", () => {
+      syncSectionFormToState();
+      updateActiveSectionStripSummary();
+      renderSectionPreview();
+    });
   }
 }
 
@@ -2885,11 +3098,12 @@ async function runAnalysis(): Promise<void> {
   const wasm = state.wasm;
   if (!wasm) throw new Error(state.lang === "en" ? "WASM is not ready yet." : "WASM henuz hazir degil.");
 
+  syncSectionFormToState();
   setStatus(tx("statusPmmCalculating"), "info");
 
   const loads = collectLoadsFromSheet();
-
-  const input = collectInput(loads);
+  const sec = state.sections[state.activeSectionIdx];
+  const input = collectInputForSection(sec, loads);
   state.lastInput = input;
   refs.rhoDisplay.textContent = reinforcementRatioText(input);
 
@@ -2938,29 +3152,31 @@ async function runAnalysis(): Promise<void> {
   const maxDcr = Math.max(...results.map((r) => r.dcr));
   const failCount = compliance.filter((c) => c.status === "fail").length;
   const infoCount = compliance.filter((c) => c.status === "info").length;
-  setStatus(runSummaryText(input, maxDcr, failCount, infoCount), "info");
+  const sectionLabel = sec.name;
+  const summaryBase = runSummaryText(input, maxDcr, failCount, infoCount);
+  setStatus(`[${sectionLabel}] ${summaryBase}`, "info");
 }
 
-function collectInput(loads: LoadCase[]): AppInput {
+function collectInputForSection(sec: SectionDef, loads: LoadCase[]): AppInput {
   return {
     codeMode: refs.codeMode.value as CodeMode,
     concreteModel: refs.concreteModel.value as ConcreteModel,
     useExpectedStrength: refs.useExpectedStrength.checked,
     expectedFckFactor: n(refs.expectedFckFactor.value),
     expectedFykFactor: n(refs.expectedFykFactor.value),
-    shape: refs.shape.value as Shape,
-    widthM: n(refs.width.value),
-    heightM: n(refs.height.value),
-    diameterM: n(refs.diameter.value),
-    barsX: ni(refs.barsX.value),
-    barsY: ni(refs.barsY.value),
-    bars: ni(refs.bars.value),
-    coverM: n(refs.cover.value),
-    tieDiaMm: n(refs.tieDia.value),
-    barDiaMm: n(refs.barDia.value),
-    tieSpacingConfMm: n(refs.tieSpacingConf.value),
-    tieSpacingMidMm: n(refs.tieSpacingMid.value),
-    coverToCenter: refs.coverToCenter.checked,
+    shape: sec.shape,
+    widthM: n(sec.width),
+    heightM: n(sec.height),
+    diameterM: n(sec.diameter),
+    barsX: ni(sec.barsX),
+    barsY: ni(sec.barsY),
+    bars: ni(sec.bars),
+    coverM: n(sec.cover),
+    tieDiaMm: n(sec.tieDia),
+    barDiaMm: n(sec.barDia),
+    tieSpacingConfMm: n(sec.tieSpacingConf),
+    tieSpacingMidMm: n(sec.tieSpacingMid),
+    coverToCenter: sec.coverToCenter,
     fck: n(refs.fck.value),
     fyk: n(refs.fyk.value),
     gammaC: n(refs.gammaC.value),
@@ -5022,26 +5238,29 @@ function sanitizeProjectFilename(raw: string): string {
 }
 
 function collectProjectFile(): ProjectFileV1 {
+  syncSectionFormToState();
+  const activeSec = state.sections[state.activeSectionIdx];
   return {
     schema: "pmmstudio-project",
     version: 1,
     savedAt: new Date().toISOString(),
+    sections: state.sections.map((s) => ({ ...s })),
     input: {
       codeMode: refs.codeMode.value as CodeMode,
       concreteModel: refs.concreteModel.value as ConcreteModel,
-      shape: refs.shape.value as Shape,
-      width: refs.width.value,
-      height: refs.height.value,
-      diameter: refs.diameter.value,
-      barsX: refs.barsX.value,
-      barsY: refs.barsY.value,
-      bars: refs.bars.value,
-      cover: refs.cover.value,
-      tieDia: refs.tieDia.value,
-      barDia: refs.barDia.value,
-      tieSpacingConf: refs.tieSpacingConf.value,
-      tieSpacingMid: refs.tieSpacingMid.value,
-      coverToCenter: refs.coverToCenter.checked,
+      shape: activeSec.shape,
+      width: activeSec.width,
+      height: activeSec.height,
+      diameter: activeSec.diameter,
+      barsX: activeSec.barsX,
+      barsY: activeSec.barsY,
+      bars: activeSec.bars,
+      cover: activeSec.cover,
+      tieDia: activeSec.tieDia,
+      barDia: activeSec.barDia,
+      tieSpacingConf: activeSec.tieSpacingConf,
+      tieSpacingMid: activeSec.tieSpacingMid,
+      coverToCenter: activeSec.coverToCenter,
       useExpectedStrength: refs.useExpectedStrength.checked,
       expectedFckFactor: refs.expectedFckFactor.value,
       expectedFykFactor: refs.expectedFykFactor.value,
@@ -5133,10 +5352,35 @@ function parseProjectFile(text: string): ProjectFileV1 {
       muy: readRecordString(row, "muy"),
     }));
 
+  const sectionsArray = Array.isArray(raw.sections) ? raw.sections : [];
+  const parsedSections: SectionDef[] = sectionsArray
+    .filter((s): s is Record<string, unknown> => isRecord(s))
+    .map((s, i) => {
+      const rawShape = readRecordString(s, "shape", "rect");
+      return {
+        id: typeof s.id === "number" ? s.id : i + 1,
+        name: readRecordString(s, "name", `S${i + 1}`),
+        shape: (rawShape === "rect" || rawShape === "circle" ? rawShape : "rect") as Shape,
+        width: readRecordString(s, "width", "0.40"),
+        height: readRecordString(s, "height", "0.60"),
+        diameter: readRecordString(s, "diameter", "0.60"),
+        barsX: readRecordString(s, "barsX", "4"),
+        barsY: readRecordString(s, "barsY", "4"),
+        bars: readRecordString(s, "bars", "12"),
+        cover: readRecordString(s, "cover", "0.04"),
+        tieDia: readRecordString(s, "tieDia", "10"),
+        barDia: readRecordString(s, "barDia", "16"),
+        tieSpacingConf: readRecordString(s, "tieSpacingConf", "100"),
+        tieSpacingMid: readRecordString(s, "tieSpacingMid", "150"),
+        coverToCenter: readRecordBoolean(s, "coverToCenter", false),
+      };
+    });
+
   return {
     schema: "pmmstudio-project",
     version: 1,
     savedAt: typeof raw.savedAt === "string" ? raw.savedAt : new Date().toISOString(),
+    sections: parsedSections.length > 0 ? parsedSections : undefined,
     input: {
       codeMode: codeModeRaw === "ts500" || codeModeRaw === "ts500_tbdy" || codeModeRaw === "aci318_19" ? codeModeRaw : "ts500_tbdy",
       concreteModel: concreteModelRaw === "ts500_block" || concreteModelRaw === "mander_core_cover" ? concreteModelRaw : "mander_core_cover",
@@ -5260,19 +5504,30 @@ function persistProjectPrefs(): void {
 function applyProjectFile(project: ProjectFileV1): void {
   setSelectValue(refs.codeMode, project.input.codeMode, "ts500_tbdy");
   setSelectValue(refs.concreteModel, project.input.concreteModel, "mander_core_cover");
-  setSelectValue(refs.shape, project.input.shape, "rect");
-  setTextValue(refs.width, project.input.width, "0.40");
-  setTextValue(refs.height, project.input.height, "0.60");
-  setTextValue(refs.diameter, project.input.diameter, "0.60");
-  setTextValue(refs.barsX, project.input.barsX, "4");
-  setTextValue(refs.barsY, project.input.barsY, "4");
-  setTextValue(refs.bars, project.input.bars, "12");
-  setTextValue(refs.cover, project.input.cover, "0.04");
-  setTextValue(refs.tieDia, project.input.tieDia, "10");
-  setTextValue(refs.barDia, project.input.barDia, "16");
-  setTextValue(refs.tieSpacingConf, project.input.tieSpacingConf, "100");
-  setTextValue(refs.tieSpacingMid, project.input.tieSpacingMid, "150");
-  refs.coverToCenter.checked = project.input.coverToCenter;
+
+  // Restore sections: use saved sections array, or fall back to single section from input
+  if (project.sections && project.sections.length > 0) {
+    state.sections = project.sections.map((s) => ({ ...s }));
+    state.sectionIdCounter = Math.max(...state.sections.map((s) => s.id), 0);
+  } else {
+    const shapeVal = project.input.shape === "rect" || project.input.shape === "circle" ? project.input.shape : "rect";
+    state.sections = [{
+      id: 1, name: "S1", shape: shapeVal as Shape,
+      width: project.input.width || "0.40", height: project.input.height || "0.60",
+      diameter: project.input.diameter || "0.60",
+      barsX: project.input.barsX || "4", barsY: project.input.barsY || "4",
+      bars: project.input.bars || "12", cover: project.input.cover || "0.04",
+      tieDia: project.input.tieDia || "10", barDia: project.input.barDia || "16",
+      tieSpacingConf: project.input.tieSpacingConf || "100",
+      tieSpacingMid: project.input.tieSpacingMid || "150",
+      coverToCenter: project.input.coverToCenter,
+    }];
+    state.sectionIdCounter = 1;
+  }
+  state.activeSectionIdx = 0;
+  state.sectionFormExpanded = true;
+  loadSectionToForm(0);
+  renderSectionStrip();
   refs.useExpectedStrength.checked = project.input.useExpectedStrength;
   setTextValue(refs.expectedFckFactor, project.input.expectedFckFactor, "1.30");
   setTextValue(refs.expectedFykFactor, project.input.expectedFykFactor, "1.20");
