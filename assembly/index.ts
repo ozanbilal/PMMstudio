@@ -861,6 +861,7 @@ function bisectCForP(
   ny: f64,
   phi: f64,
   pTarget: f64,
+  cHint: f64,
   cLo: f64,
   cHi: f64,
   k1: f64,
@@ -869,44 +870,107 @@ function bisectCForP(
   esKn: f64,
   barArea: f64
 ): f64 {
-  let numSegments = 20;
+  if (cHi <= cLo) return -1.0;
+
+  let fTol = 0.5; // kN
+  let numSegments = 64;
   let dc = (cHi - cLo) / <f64>numSegments;
-  
-  let validLo = cLo;
-  let validHi = cHi;
-  let found = false;
-  
+  if (dc <= EPS) return -1.0;
+
   let cPrev = cLo;
   let fPrev = evalForceAtPhiC(nx, ny, cPrev, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
-  
+  let bestC = cPrev;
+  let bestAbs = Math.abs(fPrev);
+  if (bestAbs < fTol) return bestC;
+
+  let hasBracket = false;
+  let bracketLo = cLo;
+  let bracketHi = cHi;
+  let bracketDist = INF;
+
   for (let i = 1; i <= numSegments; i++) {
     let cCurr = cLo + <f64>i * dc;
     let fCurr = evalForceAtPhiC(nx, ny, cCurr, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
-    if (fPrev * fCurr <= 0.0) {
-      validLo = cPrev;
-      validHi = cCurr;
-      found = true;
-      break;
+    let absCurr = Math.abs(fCurr);
+    if (absCurr < bestAbs) {
+      bestAbs = absCurr;
+      bestC = cCurr;
     }
+    if (absCurr < fTol) return cCurr;
+
+    if (fPrev * fCurr <= 0.0) {
+      let cMid = 0.5 * (cPrev + cCurr);
+      let dist = cHint > 0.0 ? Math.abs(cMid - cHint) : -1.0;
+      if (!hasBracket || (cHint > 0.0 && dist < bracketDist)) {
+        hasBracket = true;
+        bracketDist = dist;
+        bracketLo = cPrev;
+        bracketHi = cCurr;
+      }
+    }
+
     cPrev = cCurr;
     fPrev = fCurr;
   }
-  
-  if (!found) return -1.0;
-  
-  let fL = evalForceAtPhiC(nx, ny, validLo, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
-  let cA = validLo;
-  let cB = validHi;
-  
-  for (let iter = 0; iter < 64; iter++) {
+
+  // No explicit sign change found: try around previous-step hint first.
+  if (!hasBracket) {
+    if (cHint > 0.0) {
+      let span = dc * 2.0;
+      for (let k = 0; k < 7 && !hasBracket; k++) {
+        let cA = cHint - span;
+        if (cA < cLo) cA = cLo;
+        let cB = cHint + span;
+        if (cB > cHi) cB = cHi;
+        if (cB <= cA + EPS) {
+          span *= 2.0;
+          continue;
+        }
+
+        let seg = 16;
+        let dLocal = (cB - cA) / <f64>seg;
+        let cP = cA;
+        let fP = evalForceAtPhiC(nx, ny, cP, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
+        if (Math.abs(fP) < fTol) return cP;
+
+        for (let j = 1; j <= seg; j++) {
+          let cQ = cA + <f64>j * dLocal;
+          let fQ = evalForceAtPhiC(nx, ny, cQ, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
+          if (Math.abs(fQ) < fTol) return cQ;
+          if (fP * fQ <= 0.0) {
+            hasBracket = true;
+            bracketLo = cP;
+            bracketHi = cQ;
+            break;
+          }
+          cP = cQ;
+          fP = fQ;
+        }
+        span *= 2.0;
+      }
+    }
+
+    // Near-miss fallback: strict for Mander, slightly relaxed for TS500 block.
+    if (!hasBracket) {
+      let nearTol = concreteModel == 0 ? 5.0 : 1.0;
+      if (bestAbs < nearTol) return bestC;
+      return -1.0;
+    }
+  }
+
+  let cA = bracketLo;
+  let cB = bracketHi;
+  let fA = evalForceAtPhiC(nx, ny, cA, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
+
+  for (let iter = 0; iter < 72; iter++) {
     let cMid = 0.5 * (cA + cB);
     let fMid = evalForceAtPhiC(nx, ny, cMid, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
-    if (Math.abs(fMid) < 0.5) return cMid; // 0.5 kN tolerance
-    if (fL * fMid <= 0.0) {
+    if (Math.abs(fMid) < fTol) return cMid;
+    if (fA * fMid <= 0.0) {
       cB = cMid;
     } else {
       cA = cMid;
-      fL = fMid;
+      fA = fMid;
     }
   }
   return 0.5 * (cA + cB);
@@ -968,26 +1032,39 @@ export function buildMomentCurvature(
   }
   if (epsUlt < 0.001) epsUlt = 0.003; // safety floor
 
-  // phi range on log scale: from near-elastic to concrete crushing at 3% depth
-  let phiMax = epsUlt / (depth * 0.03);
-  let phiMin = phiMax / 3000.0;
+  // For TS500 equivalent-block mode, sweep further into post-peak region so
+  // M-phi truncation behaviour matches the Mander path robustness.
+  let postPeakSweepFactor = concreteModel == 0 ? 2.5 : 1.0;
+  let epsSweep = epsUlt * postPeakSweepFactor;
+  if (epsSweep < epsUlt) epsSweep = epsUlt;
+
+  // phi range on log scale: from near-elastic to extended post-peak strain
+  let phiMax = epsSweep / (depth * 0.03);
+  let phiMinBase = epsUlt / (depth * 0.03);
+  let phiMin = phiMinBase / 3000.0;
   if (phiMin < 1e-8) phiMin = 1e-8;
 
   let logMin = Math.log(phiMin);
   let logMax = Math.log(phiMax);
+  // Continuation hint:
+  // TS500 equivalent-block can have multiple NA roots at very low phi.
+  // Start from deeper NA to capture the near-elastic low-moment branch first.
+  let cHint = concreteModel == 0 ? depth * 30.0 : depth * 0.6;
+  if (cHint < depth * 5e-5) cHint = depth * 5e-5;
 
   for (let i = 0; i < nSteps; i++) {
     let t = <f64>i / <f64>(nSteps - 1);
     let phi = Math.exp(logMin + t * (logMax - logMin));
 
-    // Upper c bound: extreme fibre strain = 1.5 * epsUlt
-    let cMaxB = (epsUlt * 1.5) / phi;
+    // Upper c bound: allow post-peak strain headroom for robust TS500 tracing
+    let cMaxB = (epsSweep * 1.5) / phi;
     if (cMaxB > depth * 300.0) cMaxB = depth * 300.0;
     let cLo = depth * 5e-5;
     if (cLo >= cMaxB) continue;
 
-    let c = bisectCForP(nx, ny, phi, pKn, cLo, cMaxB, k1, concStress, fyd, esKn, barArea);
+    let c = bisectCForP(nx, ny, phi, pKn, cHint, cLo, cMaxB, k1, concStress, fyd, esKn, barArea);
     if (c < 0.0) continue;
+    cHint = c;
 
     let epsTop = phi * c;
     let res = computeResponse(nx, ny, c, epsTop, k1, concStress, fyd, esKn, barArea);

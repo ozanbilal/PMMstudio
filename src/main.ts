@@ -87,6 +87,147 @@ interface LoadCase {
   muy: number;
 }
 
+type LoadSheetCol = "name" | "pu" | "mux" | "muy";
+
+interface LoadSheetRow {
+  name: string;
+  pu: string;
+  mux: string;
+  muy: string;
+}
+
+interface LoadSheetValidationIssue {
+  row: number;
+  col: LoadSheetCol;
+  message: string;
+}
+
+interface LoadCellRange {
+  rowStart: number;
+  rowEnd: number;
+  colStart: number;
+  colEnd: number;
+}
+
+interface ReportSectionOptions {
+  cover: boolean;
+  summary: boolean;
+  visuals: boolean;
+  loadInput: boolean;
+  loadResults: boolean;
+  compliance: boolean;
+  mphi: boolean;
+  appendix: boolean;
+}
+
+interface ReportMeta {
+  project: string;
+  company: string;
+  documentTitle: string;
+  client: string;
+  preparedBy: string;
+  checkedBy: string;
+  revision: string;
+  reportDate: string;
+  logoDataUrl: string;
+  sections: ReportSectionOptions;
+}
+
+interface ProjectInputState {
+  codeMode: CodeMode;
+  concreteModel: ConcreteModel;
+  shape: Shape;
+  width: string;
+  height: string;
+  diameter: string;
+  barsX: string;
+  barsY: string;
+  bars: string;
+  cover: string;
+  tieDia: string;
+  barDia: string;
+  tieSpacingConf: string;
+  tieSpacingMid: string;
+  coverToCenter: boolean;
+  useExpectedStrength: boolean;
+  expectedFckFactor: string;
+  expectedFykFactor: string;
+  fck: string;
+  fyk: string;
+  gammaC: string;
+  gammaS: string;
+  es: string;
+  epsCu: string;
+  mesh: string;
+  nAngle: string;
+  nDepth: string;
+  phiP: string;
+  phiM: string;
+  pCutoffRatio: string;
+  pVisualScale: string;
+  surfaceOpacity: string;
+  pSign: PSignMode;
+  projection: string;
+  showNominalSurface: boolean;
+  sliceAngle: string;
+  sliceHideZero: boolean;
+  mcP: string;
+  mcAngle: string;
+  mcSteps: string;
+  controlsOpen: boolean;
+}
+
+interface ProjectReportState {
+  company: string;
+  documentTitle: string;
+  project: string;
+  client: string;
+  preparedBy: string;
+  checkedBy: string;
+  revision: string;
+  reportDate: string;
+  logoDataUrl: string;
+  logoName: string;
+  sections: ReportSectionOptions;
+}
+
+interface ProjectFileV1 {
+  schema: "pmmstudio-project";
+  version: 1;
+  savedAt: string;
+  input: ProjectInputState;
+  loadSheet: LoadSheetRow[];
+  report: ProjectReportState;
+}
+
+interface MphiReportSection {
+  angleDeg: number;
+  axialLoadKn: number;
+  data: McData;
+  keyPoints: McKeyPoints;
+  imageDataUrl: string;
+}
+
+interface ReportSnapshot {
+  meta: ReportMeta;
+  input: AppInput;
+  loadCases: LoadCase[];
+  results: ResultRow[];
+  compliance: ComplianceCheck[];
+  axis: AxisExportData;
+  pmmPointCount: number;
+  maxDcr: number;
+  minDcr: number;
+  failCount: number;
+  passCount: number;
+  infoCount: number;
+  sectionPreviewDataUrl: string;
+  pmmCloudDataUrl: string;
+  pmm3dDataUrl: string;
+  mphi0: MphiReportSection;
+  mphi90: MphiReportSection;
+}
+
 interface ResultRow extends LoadCase {
   pcap: number;
   mxcap: number;
@@ -160,22 +301,9 @@ app.innerHTML = `
         <p class="sub" data-i18n="subtitle">Dairesel ve dörtgen kesit için tarayıcıda çalışan PMM/DCR kontrol aracı</p>
       </div>
       <div class="hero-actions">
-        <div class="hero-controls">
-          <label class="compact-field">
-            <span data-i18n="labelLanguage">Dil / Language</span>
-            <select id="lang" class="compact-select">
-              <option value="tr" data-i18n="optLangTr">Türkçe</option>
-              <option value="en" data-i18n="optLangEn">English</option>
-            </select>
-          </label>
-
-          <label class="compact-field">
-            <span data-i18n="labelTheme">Tema</span>
-            <select id="theme" class="compact-select">
-              <option value="dark" data-i18n="optThemeDark">Karanlık</option>
-              <option value="light" data-i18n="optThemeLight">Aydınlık</option>
-            </select>
-          </label>
+        <div class="hero-controls hero-controls--toggles">
+          <button id="lang-toggle" type="button" class="hero-ctrl-btn" aria-label="Dil / Language">EN</button>
+          <button id="theme-toggle" type="button" class="hero-ctrl-btn hero-ctrl-btn-theme" aria-label="Tema / Theme">☀</button>
         </div>
       </div>
 
@@ -210,10 +338,14 @@ app.innerHTML = `
       </svg>
     </header>
 
-    <main class="workspace">
-      <section class="panel controls">
-        <div class="panel-head panel-head-inline">
+    <main id="workspace-main" class="workspace">
+      <details class="panel controls accordion controls-accordion" id="controls-accordion" open>
+        <summary class="accordion-head controls-accordion-head">
           <h2 data-i18n="headingInputs">Girdi ve Kesit Tanımı</h2>
+          <span class="accordion-hint" data-i18n="accordionHint">Aç / Kapat</span>
+        </summary>
+        <div class="accordion-body controls-accordion-body">
+        <div class="panel-head panel-head-inline controls-panel-actions">
           <div class="panel-head-actions">
             <button id="run-btn" class="run-btn" data-i18n="btnRun">PMM Hesapla</button>
           </div>
@@ -380,6 +512,11 @@ app.innerHTML = `
                 <input id="p-visual-scale" type="number" value="0.55" min="0.20" max="1.50" step="0.05" />
               </label>
               <label>
+                <span data-i18n="labelSurfaceOpacity">3B yüzey saydamlığı</span>
+                <input id="surface-opacity" type="range" value="0.88" min="0.15" max="1.00" step="0.01" />
+                <small id="surface-opacity-value" class="range-hint">0.88</small>
+              </label>
+              <label>
                 <span data-i18n="labelPSign">P işaret konvansiyonu</span>
                 <select id="p-sign">
                   <option value="compression_positive" data-i18n="optPSignPositive">Basınç (+)</option>
@@ -418,41 +555,135 @@ app.innerHTML = `
         <section class="input-group input-group--loads">
           <div class="input-group-head">
             <h3 data-i18n="headingGroupLoads">Yük Tanımı ve Dışa Aktarım</h3>
+            <div class="loads-head-actions">
+              <button type="button" id="load-add-row" class="action-btn-lite" data-i18n="btnLoadAddRow">Satır Ekle</button>
+              <button type="button" id="load-delete-row" class="action-btn-lite" data-i18n="btnLoadDeleteRow">Seçiliyi Sil</button>
+              <button type="button" id="load-clean-empty" class="action-btn-lite" data-i18n="btnLoadCleanRows">Boşları Temizle</button>
+              <button type="button" id="load-copy" class="action-btn-lite" data-i18n="btnLoadCopy">TSV Kopyala</button>
+            </div>
           </div>
-          <div class="loads">
+
+          <div class="load-sheet-wrap">
+            <table id="load-sheet-table" class="load-sheet-table" aria-label="Yük tablo girişi">
+              <thead>
+                <tr>
+                  <th data-i18n="colLoadSelect">Seç</th>
+                  <th data-i18n="colLoadNameEdit">Yük Adı</th>
+                  <th data-i18n="colLoadPuEdit">Pu (kN)</th>
+                  <th data-i18n="colLoadMuxEdit">Mux (kNm)</th>
+                  <th data-i18n="colLoadMuyEdit">Muy (kNm)</th>
+                </tr>
+              </thead>
+              <tbody id="load-sheet-body"></tbody>
+            </table>
+          </div>
+
+          <div class="loads loads-secondary">
             <label>
-              <span data-i18n="labelLoads">Yükler (satır başına: </span><code data-i18n="labelLoadsFmtA">ad,Pu,Mux,Muy</code><span data-i18n="labelLoadsOr"> veya </span><code data-i18n="labelLoadsFmtB">Pu,Mux,Muy</code><span data-i18n="labelLoadsEnd">)</span>
+              <span data-i18n="labelLoadsTextarea">Yedek metin girişi (satır başına: </span><code data-i18n="labelLoadsFmtA">ad,Pu,Mux,Muy</code><span data-i18n="labelLoadsOr"> veya </span><code data-i18n="labelLoadsFmtB">Pu,Mux,Muy</code><span data-i18n="labelLoadsEnd">)</span>
               <textarea id="loads-text" rows="7">L1,1200,120,80
 L2,1800,200,140
 L3,650,90,45</textarea>
             </label>
+            <div class="loads-secondary-actions">
+              <button type="button" id="loads-apply-text" class="action-btn-lite" data-i18n="btnLoadApplyText">Metni Grid'e Aktar</button>
+            </div>
             <label>
               <span data-i18n="labelCsvLoad">CSV yük dosyası (opsiyonel; kolonlar: name,Pu,Mux,Muy)</span>
               <input id="loads-file" type="file" accept=".csv,text/csv" />
             </label>
           </div>
 
+          <section class="report-meta-card">
+            <div class="input-group-head input-group-head--compact">
+              <h4 data-i18n="headingReportMeta">Rapor Bilgileri</h4>
+            </div>
+            <div class="grid report-meta-grid">
+              <label>
+                <span data-i18n="labelReportCompany">Kurum/Firma</span>
+                <input id="report-company" type="text" placeholder="Firma Adı" />
+              </label>
+              <label>
+                <span data-i18n="labelReportDocTitle">Rapor başlığı</span>
+                <input id="report-doc-title" type="text" placeholder="Kolon PMM Teknik Raporu" />
+              </label>
+              <label>
+                <span data-i18n="labelReportProject">Proje adı</span>
+                <input id="report-project" type="text" placeholder="PMM Tasarım Kontrolü" />
+              </label>
+              <label>
+                <span data-i18n="labelReportClient">Müşteri</span>
+                <input id="report-client" type="text" placeholder="-" />
+              </label>
+              <label>
+                <span data-i18n="labelReportPrepared">Hazırlayan</span>
+                <input id="report-prepared-by" type="text" placeholder="-" />
+              </label>
+              <label>
+                <span data-i18n="labelReportChecked">Kontrol eden</span>
+                <input id="report-checked-by" type="text" placeholder="-" />
+              </label>
+              <label>
+                <span data-i18n="labelReportRevision">Revizyon</span>
+                <input id="report-revision" type="text" value="R00" />
+              </label>
+              <label>
+                <span data-i18n="labelReportDate">Rapor tarihi</span>
+                <input id="report-date" type="date" />
+              </label>
+              <label class="report-logo-field">
+                <span data-i18n="labelReportLogo">Kurumsal logo</span>
+                <input id="report-logo" type="file" accept="image/*" />
+                <small id="report-logo-name" class="range-hint" data-i18n="labelReportLogoNoFile">Logo seçilmedi</small>
+              </label>
+            </div>
+            <section class="report-sections-card">
+              <h5 data-i18n="headingReportSections">Rapor Ayarları</h5>
+              <div class="report-sections-grid">
+                <label class="checkbox-inline"><input id="report-sec-cover" type="checkbox" checked /><span data-i18n="labelReportSecCover">Kapak ve Kimlik</span></label>
+                <label class="checkbox-inline"><input id="report-sec-summary" type="checkbox" checked /><span data-i18n="labelReportSecSummary">Analiz Özeti</span></label>
+                <label class="checkbox-inline"><input id="report-sec-visuals" type="checkbox" checked /><span data-i18n="labelReportSecVisuals">Kesit ve PMM Görselleri</span></label>
+                <label class="checkbox-inline"><input id="report-sec-load-input" type="checkbox" checked /><span data-i18n="labelReportSecLoadInput">Yük Girdileri</span></label>
+                <label class="checkbox-inline"><input id="report-sec-load-results" type="checkbox" checked /><span data-i18n="labelReportSecLoadResults">Yük Sonuçları</span></label>
+                <label class="checkbox-inline"><input id="report-sec-compliance" type="checkbox" checked /><span data-i18n="labelReportSecCompliance">Kod Uyumluluk Kontrolü</span></label>
+                <label class="checkbox-inline"><input id="report-sec-mphi" type="checkbox" checked /><span data-i18n="labelReportSecMphi">Moment-Eğrilik</span></label>
+                <label class="checkbox-inline"><input id="report-sec-appendix" type="checkbox" checked /><span data-i18n="labelReportSecAppendix">Ekler (Mx/My Zarf)</span></label>
+              </div>
+            </section>
+          </section>
+
           <div class="actions">
+            <input id="project-file" class="hidden" type="file" accept=".pmm,.json,application/json" />
+            <button id="project-open" type="button" data-i18n="btnProjectOpen">PMM Aç</button>
+            <button id="project-save" type="button" data-i18n="btnProjectSave">PMM Kaydet</button>
             <button id="export-results" disabled data-i18n="btnExportResults">Sonuç CSV</button>
             <button id="export-surface" disabled data-i18n="btnExportSurface">PMM Nokta CSV</button>
             <button id="export-report" disabled data-i18n="btnExportReport">Rapor Word</button>
+            <button id="export-report-pdf" disabled data-i18n="btnExportReportPdf">Rapor PDF</button>
           </div>
           <p id="rho-display" class="status rho-line"></p>
         </section>
-      </section>
+        </div>
+      </details>
 
       <div class="right-col-wrap" style="display: flex; flex-direction: column; gap: 16px;">
         <section class="panel viz">
           <div class="viz-head">
           <h2 data-i18n="headingCloud">PMM Nokta Bulutu</h2>
-          <label class="compact-field">
-          <span data-i18n="labelProjection">Görünüm</span>
-            <select id="projection">
-              <option value="p-mx" data-i18n="optProjPMx">P - Mx</option>
-              <option value="p-my" data-i18n="optProjPMy">P - My</option>
-              <option value="mx-my" data-i18n="optProjMxMy">Mx - My</option>
-            </select>
-          </label>
+          <div class="viz-head-controls">
+            <label class="checkbox-inline checkbox-inline--viz">
+              <input id="show-nominal-surface" type="checkbox" />
+              <span data-i18n="labelShowNominalSurface">Nominal zarfı göster</span>
+            </label>
+            <label class="compact-field">
+              <span data-i18n="labelProjection">Görünüm</span>
+              <select id="projection">
+                <option value="p-mx" data-i18n="optProjPMx">P - Mx</option>
+                <option value="p-my" data-i18n="optProjPMy">P - My</option>
+                <option value="mx-my" data-i18n="optProjMxMy">Mx - My</option>
+              </select>
+            </label>
+          </div>
         </div>
         <canvas id="plot" width="1100" height="500"></canvas>
         <div class="viz3d-split">
@@ -622,8 +853,10 @@ L3,650,90,45</textarea>
 `;
 
 const refs = {
-  lang: must<HTMLSelectElement>("lang"),
-  theme: must<HTMLSelectElement>("theme"),
+  workspace: must<HTMLElement>("workspace-main"),
+  controlsAccordion: must<HTMLDetailsElement>("controls-accordion"),
+  langToggle: must<HTMLButtonElement>("lang-toggle"),
+  themeToggle: must<HTMLButtonElement>("theme-toggle"),
   codeMode: must<HTMLSelectElement>("code-mode"),
   concreteModel: must<HTMLSelectElement>("concrete-model"),
   shape: must<HTMLSelectElement>("shape"),
@@ -656,19 +889,50 @@ const refs = {
   phiM: must<HTMLInputElement>("phi-m"),
   pCutoffRatio: must<HTMLInputElement>("p-cutoff-ratio"),
   pVisualScale: must<HTMLInputElement>("p-visual-scale"),
+  surfaceOpacity: must<HTMLInputElement>("surface-opacity"),
+  surfaceOpacityValue: must<HTMLElement>("surface-opacity-value"),
   pSign: must<HTMLSelectElement>("p-sign"),
+  loadSheetBody: must<HTMLTableSectionElement>("load-sheet-body"),
+  loadAddRowBtn: must<HTMLButtonElement>("load-add-row"),
+  loadDeleteRowBtn: must<HTMLButtonElement>("load-delete-row"),
+  loadCleanEmptyBtn: must<HTMLButtonElement>("load-clean-empty"),
+  loadCopyBtn: must<HTMLButtonElement>("load-copy"),
+  loadsApplyTextBtn: must<HTMLButtonElement>("loads-apply-text"),
   loadsText: must<HTMLTextAreaElement>("loads-text"),
   loadsFile: must<HTMLInputElement>("loads-file"),
+  projectFile: must<HTMLInputElement>("project-file"),
+  projectOpen: must<HTMLButtonElement>("project-open"),
+  projectSave: must<HTMLButtonElement>("project-save"),
   runBtn: must<HTMLButtonElement>("run-btn"),
   exportResults: must<HTMLButtonElement>("export-results"),
   exportSurface: must<HTMLButtonElement>("export-surface"),
   exportReport: must<HTMLButtonElement>("export-report"),
+  exportReportPdf: must<HTMLButtonElement>("export-report-pdf"),
+  reportCompany: must<HTMLInputElement>("report-company"),
+  reportDocTitle: must<HTMLInputElement>("report-doc-title"),
+  reportProject: must<HTMLInputElement>("report-project"),
+  reportClient: must<HTMLInputElement>("report-client"),
+  reportPreparedBy: must<HTMLInputElement>("report-prepared-by"),
+  reportCheckedBy: must<HTMLInputElement>("report-checked-by"),
+  reportRevision: must<HTMLInputElement>("report-revision"),
+  reportDate: must<HTMLInputElement>("report-date"),
+  reportLogo: must<HTMLInputElement>("report-logo"),
+  reportLogoName: must<HTMLElement>("report-logo-name"),
+  reportSecCover: must<HTMLInputElement>("report-sec-cover"),
+  reportSecSummary: must<HTMLInputElement>("report-sec-summary"),
+  reportSecVisuals: must<HTMLInputElement>("report-sec-visuals"),
+  reportSecLoadInput: must<HTMLInputElement>("report-sec-load-input"),
+  reportSecLoadResults: must<HTMLInputElement>("report-sec-load-results"),
+  reportSecCompliance: must<HTMLInputElement>("report-sec-compliance"),
+  reportSecMphi: must<HTMLInputElement>("report-sec-mphi"),
+  reportSecAppendix: must<HTMLInputElement>("report-sec-appendix"),
   status: must<HTMLParagraphElement>("status"),
   statusLog: must<HTMLOListElement>("status-log"),
   rhoDisplay: must<HTMLParagraphElement>("rho-display"),
   sectionPreview: must<HTMLCanvasElement>("section-preview"),
   sectionPreviewMeta: must<HTMLParagraphElement>("section-preview-meta"),
   projection: must<HTMLSelectElement>("projection"),
+  showNominalSurface: must<HTMLInputElement>("show-nominal-surface"),
   sliceAngle: must<HTMLInputElement>("slice-angle"),
   sliceHideZero: must<HTMLInputElement>("slice-hide-zero"),
   sliceCopy: must<HTMLButtonElement>("slice-copy"),
@@ -717,6 +981,7 @@ const state: {
   wasm: WasmExports | null;
   results: ResultRow[];
   surface: PmmPoint[];
+  nominalSurface: PmmPoint[];
   compliance: ComplianceCheck[];
   angleCount: number;
   depthCount: number;
@@ -728,10 +993,20 @@ const state: {
   lastInput: AppInput | null;
   statusLogEntries: Array<{ text: string; level: StatusLevel }>;
   mcData: McData | null;
+  loadSheet: LoadSheetRow[];
+  loadIssues: LoadSheetValidationIssue[];
+  selectedLoadRows: Set<number>;
+  activeLoadCell: { row: number; col: LoadSheetCol } | null;
+  loadSelectionAnchor: { row: number; col: LoadSheetCol } | null;
+  selectedLoadRange: LoadCellRange | null;
+  loadMouseSelecting: boolean;
+  reportLogoDataUrl: string;
+  showNominalSurface: boolean;
 } = {
   wasm: null,
   results: [],
   surface: [],
+  nominalSurface: [],
   compliance: [],
   angleCount: 0,
   depthCount: 0,
@@ -743,6 +1018,15 @@ const state: {
   lastInput: null,
   statusLogEntries: [],
   mcData: null,
+  loadSheet: [],
+  loadIssues: [],
+  selectedLoadRows: new Set<number>(),
+  activeLoadCell: null,
+  loadSelectionAnchor: null,
+  selectedLoadRange: null,
+  loadMouseSelecting: false,
+  reportLogoDataUrl: "",
+  showNominalSurface: false,
 };
 
 const I18N = {
@@ -792,6 +1076,8 @@ const I18N = {
     labelPhiM: "phiM (eğilme)",
     labelPCutoff: "P cut-off katsayısı",
     labelPVisualScale: "3B P ekseni görsel ölçeği",
+    labelSurfaceOpacity: "3B yüzey saydamlığı",
+    labelShowNominalSurface: "Nominal zarfı göster (phi uygulanmadan)",
     labelPSign: "P işaret konvansiyonu",
     optPSignPositive: "Basınç (+)",
     optPSignNegative: "Basınç (-) [SAP2000]",
@@ -801,15 +1087,49 @@ const I18N = {
     labelExpectedFykFactor: "Beklenen çelik katsayısı fye/fyk",
     headingSectionPreview: "Kesit ve Donatı Yerleşimi",
     labelLoads: "Yükler (satır başına: ",
+    labelLoadsTextarea: "Yedek metin girişi (satır başına: ",
     labelLoadsFmtA: "ad,Pu,Mux,Muy",
     labelLoadsOr: " veya ",
     labelLoadsFmtB: "Pu,Mux,Muy",
     labelLoadsEnd: ")",
     labelCsvLoad: "CSV yük dosyası (opsiyonel; kolonlar: name,Pu,Mux,Muy)",
+    colLoadSelect: "Seç",
+    colLoadNameEdit: "Yük Adı",
+    colLoadPuEdit: "Pu (kN)",
+    colLoadMuxEdit: "Mux (kNm)",
+    colLoadMuyEdit: "Muy (kNm)",
+    btnLoadAddRow: "Satır Ekle",
+    btnLoadDeleteRow: "Seçiliyi Sil",
+    btnLoadCleanRows: "Boşları Temizle",
+    btnLoadCopy: "TSV Kopyala",
+    btnLoadApplyText: "Metni Grid'e Aktar",
+    headingReportMeta: "Rapor Bilgileri",
+    headingReportSections: "Rapor Ayarları",
+    labelReportCompany: "Kurum/Firma",
+    labelReportDocTitle: "Rapor başlığı",
+    labelReportProject: "Proje adı",
+    labelReportClient: "Müşteri",
+    labelReportPrepared: "Hazırlayan",
+    labelReportChecked: "Kontrol eden",
+    labelReportRevision: "Revizyon",
+    labelReportDate: "Rapor tarihi",
+    labelReportLogo: "Kurumsal logo",
+    labelReportLogoNoFile: "Logo seçilmedi",
+    labelReportSecCover: "Kapak ve Kimlik",
+    labelReportSecSummary: "Analiz Özeti",
+    labelReportSecVisuals: "Kesit ve PMM Görselleri",
+    labelReportSecLoadInput: "Yük Girdileri",
+    labelReportSecLoadResults: "Yük Sonuçları",
+    labelReportSecCompliance: "Kod Uyumluluk Kontrolü",
+    labelReportSecMphi: "Moment-Eğrilik",
+    labelReportSecAppendix: "Ekler (Mx/My Zarf)",
+    btnProjectOpen: "PMM Aç",
+    btnProjectSave: "PMM Kaydet",
     btnRun: "PMM Hesapla",
     btnExportResults: "Sonuç CSV",
     btnExportSurface: "PMM Nokta CSV",
     btnExportReport: "Rapor Word",
+    btnExportReportPdf: "Rapor PDF",
     statusWasmLoading: "WASM modülü yükleniyor...",
     statusWasmReady: "Hazır. Parametreleri girip hesap başlatabilirsiniz.",
     statusAciPresetApplied: "ACI 318-19 preset uygulandi: gc=1.00, gs=1.00, phiP=0.65, phiM=0.90",
@@ -884,6 +1204,18 @@ const I18N = {
     statusSurfaceExportEmpty: "Dışa aktarım için PMM yüzeyi bulunamadı.",
     statusReportExported: "Word raporu oluşturuldu.",
     statusReportExportEmpty: "Rapor için önce PMM analizi çalıştırın.",
+    statusReportPdfExported: "PDF yazdırma önizlemesi açıldı.",
+    statusReportMetaMissing: "Rapor için en az Proje adı ve Rapor tarihi alanlarını doldurun.",
+    statusReportLogoLoaded: "Kurumsal logo rapora eklenecek şekilde yüklendi.",
+    statusReportSectionNone: "Rapor için en az bir bölüm seçin.",
+    statusProjectSaved: "PMM proje dosyası dışa aktarıldı.",
+    statusProjectOpened: "PMM proje dosyası yüklendi. Sonuçlar temizlendi; yeniden PMM Hesapla ile güncelleyin.",
+    statusProjectInvalid: "Geçersiz PMM proje dosyası.",
+    statusLoadSheetCopied: "Yük tablosu TSV olarak panoya kopyalandı.",
+    statusLoadSheetCopyEmpty: "Kopyalanacak yük satırı bulunamadı.",
+    statusLoadSheetImported: "CSV yükleri tabloya eklendi.",
+    statusLoadSheetTextApplied: "Metin girdisi yük tablosuna aktarıldı.",
+    statusLoadSheetInvalid: "Yük tablosunda hatalı hücreler var. Lütfen işaretli alanları düzeltin.",
     headingMc: "Moment – Eğrilik Analizi",
     mcIntro: "Verilen eksenel yük altında tek eksenli eğilme için M–φ eğrisi hesaplar. Önce PMM analizi çalıştırılmış olmalıdır.",
     labelMcP: "Eksenel yük P (kN)",
@@ -951,6 +1283,8 @@ const I18N = {
     labelPhiM: "phiM (bending)",
     labelPCutoff: "P cut-off ratio",
     labelPVisualScale: "3D P-axis visual scale",
+    labelSurfaceOpacity: "3D surface opacity",
+    labelShowNominalSurface: "Show nominal envelope (no phi reduction)",
     labelPSign: "P sign convention",
     optPSignPositive: "Compression (+)",
     optPSignNegative: "Compression (-) [SAP2000]",
@@ -960,15 +1294,49 @@ const I18N = {
     labelExpectedFykFactor: "Expected steel factor fye/fyk",
     headingSectionPreview: "Section & Rebar Layout",
     labelLoads: "Loads (per line: ",
+    labelLoadsTextarea: "Fallback text input (per line: ",
     labelLoadsFmtA: "name,Pu,Mux,Muy",
     labelLoadsOr: " or ",
     labelLoadsFmtB: "Pu,Mux,Muy",
     labelLoadsEnd: ")",
     labelCsvLoad: "CSV load file (optional; columns: name,Pu,Mux,Muy)",
+    colLoadSelect: "Sel",
+    colLoadNameEdit: "Load Name",
+    colLoadPuEdit: "Pu (kN)",
+    colLoadMuxEdit: "Mux (kNm)",
+    colLoadMuyEdit: "Muy (kNm)",
+    btnLoadAddRow: "Add Row",
+    btnLoadDeleteRow: "Delete Selected",
+    btnLoadCleanRows: "Clean Empty",
+    btnLoadCopy: "Copy TSV",
+    btnLoadApplyText: "Apply Text to Grid",
+    headingReportMeta: "Report Metadata",
+    headingReportSections: "Report Settings",
+    labelReportCompany: "Company",
+    labelReportDocTitle: "Report title",
+    labelReportProject: "Project name",
+    labelReportClient: "Client",
+    labelReportPrepared: "Prepared by",
+    labelReportChecked: "Checked by",
+    labelReportRevision: "Revision",
+    labelReportDate: "Report date",
+    labelReportLogo: "Corporate logo",
+    labelReportLogoNoFile: "No logo selected",
+    labelReportSecCover: "Cover & Identity",
+    labelReportSecSummary: "Analysis Summary",
+    labelReportSecVisuals: "Section and PMM Visuals",
+    labelReportSecLoadInput: "Input Loads",
+    labelReportSecLoadResults: "Load Results",
+    labelReportSecCompliance: "Code Compliance",
+    labelReportSecMphi: "Moment-Curvature",
+    labelReportSecAppendix: "Appendix (Mx/My Envelope)",
+    btnProjectOpen: "Open PMM",
+    btnProjectSave: "Save PMM",
     btnRun: "Run PMM",
     btnExportResults: "Results CSV",
     btnExportSurface: "PMM Points CSV",
     btnExportReport: "Word Report",
+    btnExportReportPdf: "PDF Report",
     statusWasmLoading: "Loading WASM module...",
     statusWasmReady: "Ready. Enter parameters and run analysis.",
     statusAciPresetApplied: "ACI 318-19 preset applied: gc=1.00, gs=1.00, phiP=0.65, phiM=0.90",
@@ -1043,6 +1411,18 @@ const I18N = {
     statusSurfaceExportEmpty: "No PMM surface found for export.",
     statusReportExported: "Word report generated.",
     statusReportExportEmpty: "Run PMM analysis before exporting report.",
+    statusReportPdfExported: "PDF print preview opened.",
+    statusReportMetaMissing: "Fill at least Project name and Report date before export.",
+    statusReportLogoLoaded: "Corporate logo loaded and will be included in report.",
+    statusReportSectionNone: "Select at least one report section.",
+    statusProjectSaved: "PMM project file exported.",
+    statusProjectOpened: "PMM project file loaded. Stored results were cleared; run PMM again to refresh outputs.",
+    statusProjectInvalid: "Invalid PMM project file.",
+    statusLoadSheetCopied: "Load grid copied to clipboard as TSV.",
+    statusLoadSheetCopyEmpty: "No load rows available for copy.",
+    statusLoadSheetImported: "CSV loads appended to load grid.",
+    statusLoadSheetTextApplied: "Text input transferred to load grid.",
+    statusLoadSheetInvalid: "Load grid has invalid cells. Please correct highlighted fields.",
     headingMc: "Moment – Curvature Analysis",
     mcIntro: "Computes the M–φ curve for uniaxial bending under a given axial load. Run PMM analysis first.",
     labelMcP: "Axial load P (kN)",
@@ -1067,6 +1447,17 @@ const I18N = {
 } as const;
 
 type I18nKey = keyof typeof I18N.tr;
+const LOAD_SHEET_COLS: LoadSheetCol[] = ["name", "pu", "mux", "muy"];
+const NUMERIC_LOAD_COLS: Array<"pu" | "mux" | "muy"> = ["pu", "mux", "muy"];
+const DEFAULT_LOAD_SHEET: LoadSheetRow[] = [
+  { name: "L1", pu: "1200", mux: "120", muy: "80" },
+  { name: "L2", pu: "1800", mux: "200", muy: "140" },
+  { name: "L3", pu: "650", mux: "90", muy: "45" },
+];
+
+function isNumericLoadCol(col: LoadSheetCol): col is "pu" | "mux" | "muy" {
+  return col === "pu" || col === "mux" || col === "muy";
+}
 
 function tx(key: I18nKey): string {
   return I18N[state.lang][key];
@@ -1144,12 +1535,51 @@ function setStatus(text: string, level: StatusLevel = "info", writeLog = true): 
   if (writeLog) pushStatusLog(text, level);
 }
 
+function syncControlsAccordionLayout(): void {
+  const collapsed = !refs.controlsAccordion.open;
+  refs.workspace.classList.toggle("workspace-controls-collapsed", collapsed);
+  localStorage.setItem("pmm-controls-open", collapsed ? "0" : "1");
+  window.setTimeout(() => {
+    renderPlot(state.surface, state.results);
+    renderPlot3d(state.surface, state.results);
+    render3dSliceTable(state.surface);
+    if (state.mcData) {
+      resizeMcPlotsDeferred(120);
+      resizeMcPlotsDeferred(260);
+    }
+  }, 70);
+}
+
+function refreshHeroToggles(): void {
+  refs.langToggle.textContent = state.lang === "tr" ? "EN" : "TR";
+  refs.langToggle.title = state.lang === "tr" ? "English" : "Turkce";
+  refs.langToggle.setAttribute(
+    "aria-label",
+    state.lang === "tr" ? "Dili Ingilizceye cevir" : "Switch language to Turkish"
+  );
+
+  const lightTheme = state.theme === "light";
+  refs.themeToggle.textContent = lightTheme ? "☾" : "☀";
+  refs.themeToggle.title = lightTheme
+    ? (state.lang === "tr" ? "Karanlik tema" : "Dark theme")
+    : (state.lang === "tr" ? "Aydinlik tema" : "Light theme");
+  refs.themeToggle.setAttribute(
+    "aria-label",
+    lightTheme
+      ? (state.lang === "tr" ? "Karanlik temaya gec" : "Switch to dark theme")
+      : (state.lang === "tr" ? "Aydinlik temaya gec" : "Switch to light theme")
+  );
+}
+
 function applyLocale(): void {
   const all = document.querySelectorAll<HTMLElement>("[data-i18n]");
   for (const el of all) {
     const key = el.dataset.i18n as I18nKey | undefined;
     if (!key) continue;
     el.textContent = tx(key);
+  }
+  if (!state.reportLogoDataUrl) {
+    refs.reportLogoName.textContent = tx("labelReportLogoNoFile");
   }
   if (state.results.length === 0) {
     setStatus(tx("statusWasmReady"), "info", false);
@@ -1164,9 +1594,11 @@ function applyLocale(): void {
   if (state.results.length > 0) {
     renderTable(state.results);
   }
+  renderLoadSheetGrid();
   render3dSliceTable(state.surface);
   renderSectionPreview();
   updateMcFullscreenButtonLabel();
+  refreshHeroToggles();
 }
 
 function applyTheme(theme: ThemeMode): void {
@@ -1174,6 +1606,7 @@ function applyTheme(theme: ThemeMode): void {
   document.documentElement.setAttribute("data-theme", theme);
   document.body.classList.toggle("theme-light", theme === "light");
   document.body.classList.toggle("theme-dark", theme === "dark");
+  refreshHeroToggles();
   renderPlot(state.surface, state.results);
   renderPlot3d(state.surface, state.results);
   if (state.mcData) renderMcPlot(state.mcData);
@@ -1184,14 +1617,26 @@ init().catch((error) => {
 });
 
 async function init(): Promise<void> {
+  state.loadSheet = DEFAULT_LOAD_SHEET.map((row) => ({ ...row }));
+  state.loadSelectionAnchor = { row: 0, col: "name" };
+  state.selectedLoadRange = makeLoadCellRange(state.loadSelectionAnchor, state.loadSelectionAnchor);
+  state.activeLoadCell = { row: 0, col: "name" };
+  refs.reportDate.value = formatDateInputValue(new Date());
+  refs.reportDocTitle.value = "Kolon PMM Teknik Raporu";
+  refs.reportLogoName.textContent = tx("labelReportLogoNoFile");
+
   const savedLang = localStorage.getItem("pmm-lang");
   if (savedLang === "tr" || savedLang === "en") state.lang = savedLang;
-  refs.lang.value = state.lang;
 
   const savedTheme = localStorage.getItem("pmm-theme");
   if (savedTheme === "dark" || savedTheme === "light") state.theme = savedTheme;
-  refs.theme.value = state.theme;
   applyTheme(state.theme);
+
+  const savedControlsOpen = localStorage.getItem("pmm-controls-open");
+  if (savedControlsOpen === "0") {
+    refs.controlsAccordion.open = false;
+  }
+  syncControlsAccordionLayout();
 
   const savedPSign = localStorage.getItem("pmm-p-sign");
   if (savedPSign === "compression_positive" || savedPSign === "compression_negative") {
@@ -1223,8 +1668,17 @@ async function init(): Promise<void> {
   if (Number.isFinite(savedPVisual) && savedPVisual >= 0.2 && savedPVisual <= 1.5) {
     refs.pVisualScale.value = savedPVisual.toFixed(2);
   }
+  const savedSurfaceOpacity = Number(localStorage.getItem("pmm-surface-opacity"));
+  if (Number.isFinite(savedSurfaceOpacity) && savedSurfaceOpacity >= 0.15 && savedSurfaceOpacity <= 1.0) {
+    refs.surfaceOpacity.value = savedSurfaceOpacity.toFixed(2);
+  }
+  state.showNominalSurface = localStorage.getItem("pmm-show-nominal-surface") === "1";
+  refs.showNominalSurface.checked = state.showNominalSurface;
+  renderSurfaceOpacityValue();
 
   applyLocale();
+  syncLoadsTextareaFromSheet();
+  renderLoadSheetGrid();
   bindShapeVisibility();
   bindExpectedStrengthVisibility();
   applyCodeModePreset(false);
@@ -1236,19 +1690,26 @@ async function init(): Promise<void> {
     applyCodeModePreset(true);
     bindExpectedStrengthVisibility();
   });
-  refs.lang.addEventListener("change", () => {
-    state.lang = refs.lang.value as Lang;
+  refs.controlsAccordion.addEventListener("toggle", syncControlsAccordionLayout);
+  refs.langToggle.addEventListener("click", () => {
+    state.lang = state.lang === "tr" ? "en" : "tr";
     localStorage.setItem("pmm-lang", state.lang);
     applyLocale();
     renderPlot(state.surface, state.results);
     renderPlot3d(state.surface, state.results);
   });
-  refs.theme.addEventListener("change", () => {
-    const value = refs.theme.value as ThemeMode;
+  refs.themeToggle.addEventListener("click", () => {
+    const value: ThemeMode = state.theme === "dark" ? "light" : "dark";
     localStorage.setItem("pmm-theme", value);
     applyTheme(value);
   });
   refs.projection.addEventListener("change", () => {
+    renderPlot(state.surface, state.results);
+    renderPlot3d(state.surface, state.results);
+  });
+  refs.showNominalSurface.addEventListener("change", () => {
+    state.showNominalSurface = refs.showNominalSurface.checked;
+    localStorage.setItem("pmm-show-nominal-surface", state.showNominalSurface ? "1" : "0");
     renderPlot(state.surface, state.results);
     renderPlot3d(state.surface, state.results);
   });
@@ -1276,11 +1737,54 @@ async function init(): Promise<void> {
     renderPlot3d(state.surface, state.results);
     render3dSliceTable(state.surface);
   });
+  refs.surfaceOpacity.addEventListener("input", () => {
+    localStorage.setItem("pmm-surface-opacity", refs.surfaceOpacity.value);
+    renderSurfaceOpacityValue();
+    renderPlot3d(state.surface, state.results);
+  });
   refs.sliceAngle.addEventListener("input", () => {
     const parsed = Number(refs.sliceAngle.value.replace(",", "."));
     state.sliceAngleDeg = Number.isFinite(parsed) ? normalizeDeg(parsed) : 0;
     render3dSliceTable(state.surface);
   });
+  refs.loadAddRowBtn.addEventListener("click", () => {
+    addLoadSheetRows(1);
+    renderLoadSheetGrid();
+  });
+  refs.loadDeleteRowBtn.addEventListener("click", () => {
+    deleteSelectedLoadRows();
+    renderLoadSheetGrid();
+    syncLoadsTextareaFromSheet();
+  });
+  refs.loadCleanEmptyBtn.addEventListener("click", () => {
+    cleanupEmptyLoadRows();
+    renderLoadSheetGrid();
+    syncLoadsTextareaFromSheet();
+  });
+  refs.loadCopyBtn.addEventListener("click", () => copyLoadSheetSelection().catch(showError));
+  refs.loadsApplyTextBtn.addEventListener("click", () => {
+    try {
+      applyTextareaToLoadSheet();
+    } catch (error) {
+      showError(error);
+    }
+  });
+  refs.loadsFile.addEventListener("change", () => importCsvToLoadSheet().catch(showError));
+  refs.loadSheetBody.addEventListener("input", onLoadGridInput);
+  refs.loadSheetBody.addEventListener("keydown", onLoadGridKeydown);
+  refs.loadSheetBody.addEventListener("paste", onLoadGridPaste);
+  refs.loadSheetBody.addEventListener("focusin", onLoadGridFocusIn);
+  refs.loadSheetBody.addEventListener("change", onLoadGridChange);
+  refs.loadSheetBody.addEventListener("mousedown", onLoadGridMouseDown);
+  refs.loadSheetBody.addEventListener("mouseover", onLoadGridMouseOver);
+  window.addEventListener("mouseup", onLoadGridMouseUp);
+  refs.projectOpen.addEventListener("click", () => {
+    refs.projectFile.value = "";
+    refs.projectFile.click();
+  });
+  refs.projectFile.addEventListener("change", () => openProjectFile().catch(showError));
+  refs.projectSave.addEventListener("click", saveProjectFile);
+  refs.reportLogo.addEventListener("change", () => handleReportLogoSelection().catch(showError));
   refs.sliceHideZero.addEventListener("change", () => {
     render3dSliceTable(state.surface);
   });
@@ -1288,13 +1792,17 @@ async function init(): Promise<void> {
   refs.runBtn.addEventListener("click", () => runAnalysis().catch(showError));
   refs.exportResults.addEventListener("click", exportResultsCsv);
   refs.exportSurface.addEventListener("click", exportSurfaceCsv);
-  refs.exportReport.addEventListener("click", exportWordReport);
+  refs.exportReport.addEventListener("click", () => exportWordReport().catch(showError));
+  refs.exportReportPdf.addEventListener("click", () => exportPdfReport().catch(showError));
   refs.mcRunBtn.addEventListener("click", () => runMomentCurvature().catch(showError));
   refs.mcFullscreenBtn.addEventListener("click", toggleMcFullscreen);
   refs.mcCloseBtn.addEventListener("click", closeMcFullscreen);
   refs.mcCopyBtn.addEventListener("click", () => copyMcData().catch(showError));
   refs.mcExportBtn.addEventListener("click", exportMcDataToCsv);
-  window.addEventListener("resize", () => resizeMcPlotsDeferred(140));
+  window.addEventListener("resize", () => {
+    resizeMcPlotsDeferred(140);
+    resizeMcPlotsDeferred(320);
+  });
 
   setStatus(tx("statusWasmLoading"), "info");
   state.wasm = await loadWasm();
@@ -1353,6 +1861,8 @@ function bindSectionPreviewListeners(): void {
     refs.cover,
     refs.tieDia,
     refs.barDia,
+    refs.tieSpacingConf,
+    refs.tieSpacingMid,
     refs.coverToCenter,
   ];
 
@@ -1378,6 +1888,8 @@ interface SectionPreviewInput {
   coverM: number;
   tieDiaM: number;
   barDiaM: number;
+  tieSpacingConfMm: number;
+  tieSpacingMidMm: number;
   coverToCenter: boolean;
 }
 
@@ -1399,6 +1911,8 @@ function collectSectionPreviewInput(): SectionPreviewInput | null {
     coverM: parsePreviewNumber(refs.cover.value, 0),
     tieDiaM: parsePreviewNumber(refs.tieDia.value, 0) / 1000.0,
     barDiaM: parsePreviewNumber(refs.barDia.value, 0) / 1000.0,
+    tieSpacingConfMm: parsePreviewNumber(refs.tieSpacingConf.value, 0),
+    tieSpacingMidMm: parsePreviewNumber(refs.tieSpacingMid.value, 0),
     coverToCenter: refs.coverToCenter.checked,
   };
 
@@ -1450,6 +1964,165 @@ function computeSectionBarCenters(input: SectionPreviewInput): XY[] {
   return bars;
 }
 
+function previewMmText(valueMm: number, decimals = 0): string {
+  return `${fmt(valueMm, decimals)} mm`;
+}
+
+function drawArrowHead(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  ux: number,
+  uy: number,
+  size = 6
+): void {
+  const px = -uy;
+  const py = ux;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x - ux * size + px * size * 0.45, y - uy * size + py * size * 0.45);
+  ctx.lineTo(x - ux * size - px * size * 0.45, y - uy * size - py * size * 0.45);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawDimHorizontal(
+  ctx: CanvasRenderingContext2D,
+  x1: number,
+  x2: number,
+  yRef: number,
+  yDim: number,
+  text: string,
+  color: string
+): void {
+  const left = Math.min(x1, x2);
+  const right = Math.max(x1, x2);
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(left, yRef);
+  ctx.lineTo(left, yDim);
+  ctx.moveTo(right, yRef);
+  ctx.lineTo(right, yDim);
+  ctx.moveTo(left, yDim);
+  ctx.lineTo(right, yDim);
+  ctx.stroke();
+  drawArrowHead(ctx, left + 0.5, yDim, 1, 0, 6);
+  drawArrowHead(ctx, right - 0.5, yDim, -1, 0, 6);
+  ctx.font = "11px 'IBM Plex Mono'";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+  ctx.fillText(text, (left + right) * 0.5, yDim - 4);
+}
+
+function drawDimVertical(
+  ctx: CanvasRenderingContext2D,
+  y1: number,
+  y2: number,
+  xRef: number,
+  xDim: number,
+  text: string,
+  color: string
+): void {
+  const top = Math.min(y1, y2);
+  const bottom = Math.max(y1, y2);
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(xRef, top);
+  ctx.lineTo(xDim, top);
+  ctx.moveTo(xRef, bottom);
+  ctx.lineTo(xDim, bottom);
+  ctx.moveTo(xDim, top);
+  ctx.lineTo(xDim, bottom);
+  ctx.stroke();
+  drawArrowHead(ctx, xDim, top + 0.5, 0, 1, 6);
+  drawArrowHead(ctx, xDim, bottom - 0.5, 0, -1, 6);
+  ctx.save();
+  ctx.translate(xDim - 6, (top + bottom) * 0.5);
+  ctx.rotate(-Math.PI * 0.5);
+  ctx.font = "11px 'IBM Plex Mono'";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+  ctx.fillText(text, 0, 0);
+  ctx.restore();
+}
+
+function drawLeader(
+  ctx: CanvasRenderingContext2D,
+  xStart: number,
+  yStart: number,
+  xEnd: number,
+  yEnd: number,
+  text: string,
+  color: string
+): void {
+  const xMid = xStart + (xEnd > xStart ? 18 : -18);
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(xStart, yStart);
+  ctx.lineTo(xMid, yStart);
+  ctx.lineTo(xEnd, yEnd);
+  ctx.stroke();
+  drawArrowHead(ctx, xStart, yStart, xStart < xMid ? -1 : 1, 0, 5);
+  ctx.font = "11px 'IBM Plex Mono'";
+  ctx.textAlign = xEnd >= xMid ? "left" : "right";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, xEnd + (xEnd >= xMid ? 6 : -6), yEnd);
+}
+
+function drawHatchRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  color: string
+): void {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 0.7;
+  for (let t = -h; t <= w + h; t += 10) {
+    ctx.beginPath();
+    ctx.moveTo(x + t, y + h);
+    ctx.lineTo(x + t + h, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawHatchCircle(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  r: number,
+  color: string
+): void {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 0.7;
+  for (let t = -r * 2; t <= r * 2; t += 10) {
+    ctx.beginPath();
+    ctx.moveTo(cx - r + t, cy + r);
+    ctx.lineTo(cx - r + t + r * 2, cy - r);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function renderSectionPreview(): void {
   const prepared = prepareCanvasContext(refs.sectionPreview);
   if (!prepared) return;
@@ -1467,69 +2140,168 @@ function renderSectionPreview(): void {
 
   const tieCenterEdge = input.coverToCenter ? input.coverM - 0.5 * input.barDiaM : input.coverM + 0.5 * input.tieDiaM;
   const bars = computeSectionBarCenters(input);
-
+  const noteLeft = w - 188;
+  const plotLeft = 34;
+  const plotRight = noteLeft - 18;
+  const plotTop = 20;
+  const plotBottom = h - 18;
   const maxX = input.shape === "rect" ? 0.5 * input.widthM : 0.5 * input.diameterM;
   const maxY = input.shape === "rect" ? 0.5 * input.heightM : 0.5 * input.diameterM;
-  const scale = 0.88 * Math.min((w - 36) / (2 * maxX || 1), (h - 30) / (2 * maxY || 1));
-  const cx = w * 0.5;
-  const cy = h * 0.53;
+  const scale = 0.72 * Math.min((plotRight - plotLeft) / (2 * maxX || 1), (plotBottom - plotTop) / (2 * maxY || 1));
+  const cx = (plotLeft + plotRight) * 0.5;
+  const cy = (plotTop + plotBottom) * 0.52;
   const sx = (x: number): number => cx + x * scale;
   const sy = (y: number): number => cy - y * scale;
+  const techLine = state.theme === "light" ? "#2f4755" : "#a8c8d6";
+  const techFine = state.theme === "light" ? "rgba(47,71,85,0.34)" : "rgba(168,200,214,0.34)";
+  const hatchColor = state.theme === "light" ? "rgba(49,78,92,0.18)" : "rgba(164,198,212,0.17)";
+  const noteFill = state.theme === "light" ? "rgba(248, 252, 255, 0.85)" : "rgba(7, 18, 27, 0.70)";
 
-  ctx.strokeStyle = pal.grid;
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = techFine;
+  ctx.lineWidth = 0.9;
+  ctx.setLineDash([4, 4]);
   ctx.beginPath();
-  ctx.moveTo(14, cy);
-  ctx.lineTo(w - 14, cy);
-  ctx.moveTo(cx, 10);
-  ctx.lineTo(cx, h - 10);
+  ctx.moveTo(plotLeft, cy);
+  ctx.lineTo(plotRight, cy);
+  ctx.moveTo(cx, plotTop);
+  ctx.lineTo(cx, plotBottom);
   ctx.stroke();
+  ctx.setLineDash([]);
 
   if (input.shape === "rect") {
     const hw = 0.5 * input.widthM;
     const hh = 0.5 * input.heightM;
-    ctx.fillStyle = state.theme === "light" ? "rgba(225, 238, 244, 0.95)" : "rgba(13, 26, 38, 0.95)";
-    ctx.strokeStyle = pal.border;
+    const edge = input.coverToCenter ? input.coverM : input.coverM + input.tieDiaM + 0.5 * input.barDiaM;
+    const xL = sx(-hw);
+    const yT = sy(hh);
+    const widthPx = 2 * hw * scale;
+    const heightPx = 2 * hh * scale;
+    ctx.fillStyle = state.theme === "light" ? "rgba(232, 241, 246, 0.92)" : "rgba(10, 25, 36, 0.92)";
+    ctx.strokeStyle = techLine;
     ctx.lineWidth = 1.4;
-    ctx.fillRect(sx(-hw), sy(hh), 2 * hw * scale, 2 * hh * scale);
-    ctx.strokeRect(sx(-hw), sy(hh), 2 * hw * scale, 2 * hh * scale);
+    ctx.fillRect(xL, yT, widthPx, heightPx);
+    drawHatchRect(ctx, xL, yT, widthPx, heightPx, hatchColor);
+    ctx.strokeRect(xL, yT, widthPx, heightPx);
 
     const chw = hw - tieCenterEdge;
     const chh = hh - tieCenterEdge;
     if (chw > 0 && chh > 0) {
-      ctx.strokeStyle = pal.axis;
+      ctx.strokeStyle = techLine;
       ctx.lineWidth = 1.2;
       ctx.strokeRect(sx(-chw), sy(chh), 2 * chw * scale, 2 * chh * scale);
     }
+
+    drawDimHorizontal(ctx, sx(-hw), sx(hw), sy(-hh), sy(-hh) + 26, `b=${previewMmText(input.widthM * 1000, 0)}`, techLine);
+    drawDimVertical(ctx, sy(hh), sy(-hh), sx(-hw), sx(-hw) - 24, `h=${previewMmText(input.heightM * 1000, 0)}`, techLine);
+
+    const yTopBar = hh - edge;
+    const xRightBar = hw - edge;
+    const tol = Math.max(1e-6, edge * 1e-4);
+
+    if (chw > 0 && chh > 0) {
+      drawLeader(
+        ctx,
+        sx(-chw),
+        sy(chh),
+        xL - 74,
+        Math.max(plotTop + 14, yT - 22),
+        `c=${previewMmText(input.coverM * 1000, 0)}`,
+        techLine
+      );
+    }
+
+    if (input.barsX > 1) {
+      const topBars = bars
+        .filter((b) => Math.abs(b.y - yTopBar) < tol)
+        .sort((a, b) => a.x - b.x);
+      if (topBars.length > 1) {
+        const sVal = ((topBars[1].x - topBars[0].x) * 1000);
+        const midX = sx((topBars[0].x + topBars[1].x) * 0.5);
+        const barY = sy(topBars[0].y);
+        drawLeader(
+          ctx,
+          midX,
+          barY - 1,
+          xL + widthPx + 48,
+          Math.max(plotTop + 8, yT - 36),
+          `sx=${previewMmText(sVal, 1)}`,
+          techLine
+        );
+      }
+    }
+    if (input.barsY > 2) {
+      const rightBars = bars
+        .filter((b) => Math.abs(b.x - xRightBar) < tol)
+        .sort((a, b) => a.y - b.y);
+      if (rightBars.length > 1) {
+        const sVal = ((rightBars[1].y - rightBars[0].y) * 1000);
+        const midY = sy((rightBars[0].y + rightBars[1].y) * 0.5);
+        drawLeader(
+          ctx,
+          sx(rightBars[0].x) + 1,
+          midY,
+          xL + widthPx + 64,
+          midY + 26,
+          `sy=${previewMmText(sVal, 1)}`,
+          techLine
+        );
+      }
+    }
   } else {
     const r = 0.5 * input.diameterM;
-    ctx.fillStyle = state.theme === "light" ? "rgba(225, 238, 244, 0.95)" : "rgba(13, 26, 38, 0.95)";
-    ctx.strokeStyle = pal.border;
+    ctx.fillStyle = state.theme === "light" ? "rgba(232, 241, 246, 0.92)" : "rgba(10, 25, 36, 0.92)";
+    ctx.strokeStyle = techLine;
     ctx.lineWidth = 1.4;
     ctx.beginPath();
     ctx.arc(cx, cy, r * scale, 0, Math.PI * 2);
     ctx.fill();
+    drawHatchCircle(ctx, cx, cy, r * scale, hatchColor);
     ctx.stroke();
 
     const rc = r - tieCenterEdge;
     if (rc > 0) {
-      ctx.strokeStyle = pal.axis;
+      ctx.strokeStyle = techLine;
       ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.arc(cx, cy, rc * scale, 0, Math.PI * 2);
       ctx.stroke();
+      drawLeader(ctx, cx - rc * scale, cy, cx - rc * scale - 36, cy - 28, `c=${previewMmText(input.coverM * 1000, 0)}`, techLine);
     }
+
+    drawDimHorizontal(ctx, cx - r * scale, cx + r * scale, cy + r * scale, cy + r * scale + 24, `D=${previewMmText(input.diameterM * 1000, 0)}`, techLine);
   }
 
   const barR = Math.max(2.2, 0.5 * input.barDiaM * scale);
   for (const b of bars) {
-    ctx.fillStyle = state.theme === "light" ? "#20303a" : "#f0c97a";
-    ctx.strokeStyle = state.theme === "light" ? "#0e1e28" : "#ffe4a6";
-    ctx.lineWidth = 0.9;
+    ctx.fillStyle = state.theme === "light" ? "#1f2f3b" : "#0e1620";
+    ctx.strokeStyle = state.theme === "light" ? "#0d1922" : "#d8e7ef";
+    ctx.lineWidth = 0.7;
     ctx.beginPath();
     ctx.arc(sx(b.x), sy(b.y), barR, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+  }
+
+  const noteTop = plotTop + 8;
+  const noteWidth = w - noteLeft - 10;
+  const noteLines = [
+    `n = ${bars.length}`,
+    `Øboy = ${previewMmText(input.barDiaM * 1000, 0)}`,
+    `Øetr = ${previewMmText(input.tieDiaM * 1000, 0)}`,
+    `s_conf = ${previewMmText(input.tieSpacingConfMm, 0)}`,
+    `s_mid = ${previewMmText(input.tieSpacingMidMm, 0)}`,
+  ];
+  ctx.fillStyle = noteFill;
+  ctx.strokeStyle = techFine;
+  ctx.lineWidth = 1;
+  ctx.fillRect(noteLeft, noteTop, noteWidth, 108);
+  ctx.strokeRect(noteLeft, noteTop, noteWidth, 108);
+  ctx.fillStyle = techLine;
+  ctx.font = "11px 'IBM Plex Mono'";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  for (let i = 0; i < noteLines.length; i++) {
+    ctx.fillText(noteLines[i], noteLeft + 10, noteTop + 16 + i * 18);
   }
 
   const area = input.shape === "rect"
@@ -1542,16 +2314,580 @@ function renderSectionPreview(): void {
     : `${bars.length} adet bar | rho_t = %${fmt(rhoPct, 2)}`;
 }
 
+function formatDateInputValue(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function emptyLoadSheetRow(name = ""): LoadSheetRow {
+  return { name, pu: "", mux: "", muy: "" };
+}
+
+function normalizeNumberToken(raw: string): string {
+  const compact = raw.trim().replace(/\s+/g, "").replace(",", ".");
+  if (compact.length === 0) return "";
+  const num = Number(compact);
+  if (!Number.isFinite(num)) return compact;
+  return toCsvNumber(num);
+}
+
+function splitLoadLine(line: string): string[] {
+  if (line.includes("\t")) return line.split("\t");
+  if (line.includes(";")) return line.split(";");
+  return line.split(",");
+}
+
+function isLoadRowBlank(row: LoadSheetRow): boolean {
+  return row.name.trim() === "" && row.pu.trim() === "" && row.mux.trim() === "" && row.muy.trim() === "";
+}
+
+function addLoadSheetRows(count: number): void {
+  const safeCount = Math.max(1, Math.round(count));
+  for (let i = 0; i < safeCount; i++) {
+    state.loadSheet.push(emptyLoadSheetRow(`L${state.loadSheet.length + 1}`));
+  }
+}
+
+function cleanupEmptyLoadRows(): void {
+  state.loadSheet = state.loadSheet.filter((row) => !isLoadRowBlank(row));
+  if (state.loadSheet.length === 0) state.loadSheet = [emptyLoadSheetRow("L1")];
+  state.selectedLoadRows.clear();
+  state.loadSelectionAnchor = { row: 0, col: "name" };
+  state.selectedLoadRange = makeLoadCellRange(state.loadSelectionAnchor, state.loadSelectionAnchor);
+  state.activeLoadCell = { row: 0, col: "name" };
+  refreshLoadSheetValidation(false);
+}
+
+function deleteSelectedLoadRows(): void {
+  if (state.selectedLoadRows.size === 0 && state.selectedLoadRange) {
+    for (let r = state.selectedLoadRange.rowStart; r <= state.selectedLoadRange.rowEnd; r++) {
+      state.selectedLoadRows.add(r);
+    }
+  }
+  if (state.selectedLoadRows.size === 0 && state.activeLoadCell) {
+    state.selectedLoadRows.add(state.activeLoadCell.row);
+  }
+  if (state.selectedLoadRows.size === 0) return;
+  state.loadSheet = state.loadSheet.filter((_, idx) => !state.selectedLoadRows.has(idx));
+  if (state.loadSheet.length === 0) state.loadSheet = [emptyLoadSheetRow("L1")];
+  state.selectedLoadRows.clear();
+  state.selectedLoadRange = null;
+  state.loadSelectionAnchor = null;
+  state.activeLoadCell = { row: 0, col: "name" };
+  refreshLoadSheetValidation(false);
+}
+
+function syncLoadsTextareaFromSheet(): void {
+  const lines = state.loadSheet
+    .filter((row) => !isLoadRowBlank(row))
+    .map((row, idx) => {
+      const name = row.name.trim() || `L${idx + 1}`;
+      return `${name},${normalizeNumberToken(row.pu)},${normalizeNumberToken(row.mux)},${normalizeNumberToken(row.muy)}`;
+    });
+  refs.loadsText.value = lines.join("\n");
+}
+
+function parseLoadSheetFromTextarea(raw: string): LoadSheetRow[] {
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (lines.length === 0) return [emptyLoadSheetRow("L1")];
+  const parsed: LoadSheetRow[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const parts = splitLoadLine(lines[i]).map((part) => part.trim());
+    if (parts.length !== 3 && parts.length !== 4) {
+      throw new Error(state.lang === "en"
+        ? `Invalid load row ${i + 1}: ${lines[i]}`
+        : `Geçersiz yük satırı ${i + 1}: ${lines[i]}`);
+    }
+    const hasName = parts.length === 4;
+    parsed.push({
+      name: hasName ? (parts[0] || `L${i + 1}`) : `L${i + 1}`,
+      pu: normalizeNumberToken(parts[hasName ? 1 : 0]),
+      mux: normalizeNumberToken(parts[hasName ? 2 : 1]),
+      muy: normalizeNumberToken(parts[hasName ? 3 : 2]),
+    });
+  }
+  return parsed;
+}
+
+function getLoadCellIssueKey(row: number, col: LoadSheetCol): string {
+  return `${row}:${col}`;
+}
+
+function loadColIndex(col: LoadSheetCol): number {
+  return LOAD_SHEET_COLS.indexOf(col);
+}
+
+function loadColByIndex(index: number): LoadSheetCol {
+  const safe = Math.max(0, Math.min(LOAD_SHEET_COLS.length - 1, index));
+  return LOAD_SHEET_COLS[safe];
+}
+
+function normalizeLoadCellRange(range: LoadCellRange): LoadCellRange {
+  return {
+    rowStart: Math.min(range.rowStart, range.rowEnd),
+    rowEnd: Math.max(range.rowStart, range.rowEnd),
+    colStart: Math.min(range.colStart, range.colEnd),
+    colEnd: Math.max(range.colStart, range.colEnd),
+  };
+}
+
+function makeLoadCellRange(
+  from: { row: number; col: LoadSheetCol },
+  to: { row: number; col: LoadSheetCol }
+): LoadCellRange {
+  return normalizeLoadCellRange({
+    rowStart: from.row,
+    rowEnd: to.row,
+    colStart: loadColIndex(from.col),
+    colEnd: loadColIndex(to.col),
+  });
+}
+
+function isCellInLoadRange(row: number, col: LoadSheetCol, range: LoadCellRange | null): boolean {
+  if (!range) return false;
+  const c = loadColIndex(col);
+  return row >= range.rowStart && row <= range.rowEnd && c >= range.colStart && c <= range.colEnd;
+}
+
+function updateLoadRangeSelectionClasses(): void {
+  const inputs = refs.loadSheetBody.querySelectorAll<HTMLInputElement>(".load-cell");
+  for (const input of inputs) {
+    const row = Number(input.dataset.row);
+    const col = input.dataset.col as LoadSheetCol;
+    input.classList.toggle("selected-cell", isCellInLoadRange(row, col, state.selectedLoadRange));
+  }
+}
+
+function setLoadActiveCell(
+  row: number,
+  col: LoadSheetCol,
+  mode: "reset" | "extend" = "reset"
+): void {
+  const safeRow = Math.max(0, Math.min(state.loadSheet.length - 1, row));
+  state.activeLoadCell = { row: safeRow, col };
+  if (mode === "reset" || !state.loadSelectionAnchor) {
+    state.loadSelectionAnchor = { row: safeRow, col };
+    state.selectedLoadRange = makeLoadCellRange(state.loadSelectionAnchor, state.loadSelectionAnchor);
+  } else {
+    state.selectedLoadRange = makeLoadCellRange(state.loadSelectionAnchor, { row: safeRow, col });
+  }
+  updateLoadRangeSelectionClasses();
+}
+
+function refreshLoadSheetValidation(writeStatus: boolean): number {
+  const { issues } = validateLoadSheetRows(state.loadSheet);
+  state.loadIssues = issues;
+  const issueSet = new Set(issues.map((issue) => getLoadCellIssueKey(issue.row, issue.col)));
+  const cells = refs.loadSheetBody.querySelectorAll<HTMLInputElement>(".load-cell");
+  for (const cell of cells) {
+    const row = Number(cell.dataset.row);
+    const col = cell.dataset.col as LoadSheetCol;
+    cell.classList.toggle("invalid", issueSet.has(getLoadCellIssueKey(row, col)));
+  }
+  if (writeStatus && issues.length > 0) {
+    const issueText = issues
+      .slice(0, 3)
+      .map((issue) => `R${issue.row + 1}/${issue.col.toUpperCase()}`)
+      .join(", ");
+    setStatus(`${tx("statusLoadSheetInvalid")} [${issueText}]`, "danger");
+  }
+  return issues.length;
+}
+
+function renderLoadSheetGrid(): void {
+  const issueSet = new Set(state.loadIssues.map((issue) => getLoadCellIssueKey(issue.row, issue.col)));
+  const bodyHtml = state.loadSheet
+    .map((row, index) => {
+      const checked = state.selectedLoadRows.has(index) ? "checked" : "";
+      const makeCell = (col: LoadSheetCol): string => {
+        const value = row[col] ?? "";
+        const invalidClass = issueSet.has(getLoadCellIssueKey(index, col)) ? " invalid" : "";
+        const selectedClass = isCellInLoadRange(index, col, state.selectedLoadRange) ? " selected-cell" : "";
+        const inputMode = col === "name" ? "text" : "decimal";
+        return `<td>
+          <input class="load-cell${invalidClass}${selectedClass}"
+            data-row="${index}"
+            data-col="${col}"
+            inputmode="${inputMode}"
+            value="${escapeHtml(value)}" />
+        </td>`;
+      };
+      return `<tr data-row="${index}">
+        <td class="load-select-cell">
+          <input type="checkbox" class="load-row-select" data-row="${index}" ${checked} />
+          <span class="load-row-id">${index + 1}</span>
+        </td>
+        ${makeCell("name")}
+        ${makeCell("pu")}
+        ${makeCell("mux")}
+        ${makeCell("muy")}
+      </tr>`;
+    })
+    .join("");
+  refs.loadSheetBody.innerHTML = bodyHtml;
+  refreshLoadSheetValidation(false);
+  updateLoadRangeSelectionClasses();
+}
+
+function updateLoadSheetCell(rowIdx: number, col: LoadSheetCol, value: string): void {
+  if (rowIdx < 0 || rowIdx >= state.loadSheet.length) return;
+  state.loadSheet[rowIdx][col] = value;
+}
+
+function focusLoadCell(rowIdx: number, col: LoadSheetCol): void {
+  while (rowIdx >= state.loadSheet.length) addLoadSheetRows(1);
+  const target = refs.loadSheetBody.querySelector<HTMLInputElement>(`.load-cell[data-row="${rowIdx}"][data-col="${col}"]`);
+  if (!target) {
+    renderLoadSheetGrid();
+    const retried = refs.loadSheetBody.querySelector<HTMLInputElement>(`.load-cell[data-row="${rowIdx}"][data-col="${col}"]`);
+    if (retried) {
+      retried.focus();
+      retried.select();
+    }
+    return;
+  }
+  target.focus();
+  target.select();
+}
+
+function onLoadGridInput(event: Event): void {
+  const target = event.target as HTMLElement | null;
+  if (!(target instanceof HTMLInputElement) || !target.classList.contains("load-cell")) return;
+  const row = Number(target.dataset.row);
+  const col = target.dataset.col as LoadSheetCol;
+  if (!Number.isFinite(row) || !LOAD_SHEET_COLS.includes(col)) return;
+  updateLoadSheetCell(row, col, target.value);
+  state.activeLoadCell = { row, col };
+  syncLoadsTextareaFromSheet();
+  refreshLoadSheetValidation(false);
+}
+
+function onLoadGridFocusIn(event: FocusEvent): void {
+  const target = event.target as HTMLElement | null;
+  if (!(target instanceof HTMLInputElement) || !target.classList.contains("load-cell")) return;
+  const row = Number(target.dataset.row);
+  const col = target.dataset.col as LoadSheetCol;
+  if (!Number.isFinite(row) || !LOAD_SHEET_COLS.includes(col)) return;
+  if (state.loadMouseSelecting) return;
+  setLoadActiveCell(row, col, "reset");
+}
+
+function onLoadGridChange(event: Event): void {
+  const target = event.target as HTMLElement | null;
+  if (!(target instanceof HTMLInputElement)) return;
+  if (target.classList.contains("load-row-select")) {
+    const row = Number(target.dataset.row);
+    if (!Number.isFinite(row)) return;
+    if (target.checked) state.selectedLoadRows.add(row);
+    else state.selectedLoadRows.delete(row);
+    state.selectedLoadRange = null;
+    updateLoadRangeSelectionClasses();
+    return;
+  }
+  if (!target.classList.contains("load-cell")) return;
+  const row = Number(target.dataset.row);
+  const col = target.dataset.col as LoadSheetCol;
+  if (!Number.isFinite(row) || !LOAD_SHEET_COLS.includes(col)) return;
+  const normalized = isNumericLoadCol(col) ? normalizeNumberToken(target.value) : target.value.trim();
+  target.value = normalized;
+  updateLoadSheetCell(row, col, normalized);
+  setLoadActiveCell(row, col, "reset");
+  syncLoadsTextareaFromSheet();
+  refreshLoadSheetValidation(false);
+}
+
+function onLoadGridKeydown(event: KeyboardEvent): void {
+  const target = event.target as HTMLElement | null;
+  if (!(target instanceof HTMLInputElement) || !target.classList.contains("load-cell")) return;
+  const row = Number(target.dataset.row);
+  const col = target.dataset.col as LoadSheetCol;
+  if (!Number.isFinite(row) || !LOAD_SHEET_COLS.includes(col)) return;
+
+  const colIdx = LOAD_SHEET_COLS.indexOf(col);
+  let nextRow = row;
+  let nextCol = colIdx;
+  let handled = true;
+  let selectMode: "reset" | "extend" = "reset";
+
+  switch (event.key) {
+    case "Tab":
+      nextCol += event.shiftKey ? -1 : 1;
+      if (nextCol > LOAD_SHEET_COLS.length - 1) {
+        nextCol = 0;
+        nextRow += 1;
+      } else if (nextCol < 0) {
+        nextCol = LOAD_SHEET_COLS.length - 1;
+        nextRow = Math.max(0, nextRow - 1);
+      }
+      break;
+    case "Enter":
+      nextRow += 1;
+      break;
+    case "ArrowRight":
+      nextCol = Math.min(LOAD_SHEET_COLS.length - 1, colIdx + 1);
+      if (event.shiftKey) selectMode = "extend";
+      break;
+    case "ArrowLeft":
+      nextCol = Math.max(0, colIdx - 1);
+      if (event.shiftKey) selectMode = "extend";
+      break;
+    case "ArrowDown":
+      nextRow = row + 1;
+      if (event.shiftKey) selectMode = "extend";
+      break;
+    case "ArrowUp":
+      nextRow = Math.max(0, row - 1);
+      if (event.shiftKey) selectMode = "extend";
+      break;
+    default:
+      handled = false;
+  }
+
+  if (!handled) return;
+  event.preventDefault();
+  if (nextRow >= state.loadSheet.length) {
+    addLoadSheetRows(nextRow - state.loadSheet.length + 1);
+    renderLoadSheetGrid();
+  }
+  const nextColKey = LOAD_SHEET_COLS[nextCol];
+  setLoadActiveCell(nextRow, nextColKey, selectMode);
+  focusLoadCell(nextRow, nextColKey);
+}
+
+function onLoadGridPaste(event: ClipboardEvent): void {
+  const target = event.target as HTMLElement | null;
+  if (!(target instanceof HTMLInputElement) || !target.classList.contains("load-cell")) return;
+  const text = event.clipboardData?.getData("text/plain");
+  if (!text) return;
+  if (!text.includes("\n") && !text.includes("\t")) return;
+
+  const startRow = Number(target.dataset.row);
+  const startCol = target.dataset.col as LoadSheetCol;
+  const startColIdx = LOAD_SHEET_COLS.indexOf(startCol);
+  if (!Number.isFinite(startRow) || startColIdx < 0) return;
+
+  event.preventDefault();
+  const rows = text
+    .replace(/\r/g, "")
+    .split("\n")
+    .filter((line) => line.length > 0);
+  let maxColsPasted = 1;
+
+  for (let r = 0; r < rows.length; r++) {
+    const rowIdx = startRow + r;
+    while (rowIdx >= state.loadSheet.length) addLoadSheetRows(1);
+    const cells = rows[r].includes("\t") ? rows[r].split("\t") : splitLoadLine(rows[r]);
+    maxColsPasted = Math.max(maxColsPasted, cells.length);
+    for (let c = 0; c < cells.length; c++) {
+      const colIdx = startColIdx + c;
+      if (colIdx > LOAD_SHEET_COLS.length - 1) break;
+      const col = LOAD_SHEET_COLS[colIdx];
+      const raw = cells[c].trim();
+      const normalized = isNumericLoadCol(col) ? normalizeNumberToken(raw) : raw;
+      updateLoadSheetCell(rowIdx, col, normalized);
+    }
+  }
+
+  const endRow = Math.min(state.loadSheet.length - 1, startRow + rows.length - 1);
+  const endCol = loadColByIndex(startColIdx + maxColsPasted - 1);
+  state.loadSelectionAnchor = { row: startRow, col: startCol };
+  state.selectedLoadRange = makeLoadCellRange(state.loadSelectionAnchor, { row: endRow, col: endCol });
+  state.activeLoadCell = { row: endRow, col: endCol };
+  renderLoadSheetGrid();
+  syncLoadsTextareaFromSheet();
+}
+
+function onLoadGridMouseDown(event: MouseEvent): void {
+  const target = event.target as HTMLElement | null;
+  if (!(target instanceof HTMLInputElement) || !target.classList.contains("load-cell")) return;
+  const row = Number(target.dataset.row);
+  const col = target.dataset.col as LoadSheetCol;
+  if (!Number.isFinite(row) || !LOAD_SHEET_COLS.includes(col)) return;
+  event.preventDefault();
+  state.loadMouseSelecting = true;
+  if (event.shiftKey && state.loadSelectionAnchor) {
+    state.selectedLoadRange = makeLoadCellRange(state.loadSelectionAnchor, { row, col });
+    state.activeLoadCell = { row, col };
+    updateLoadRangeSelectionClasses();
+  } else {
+    setLoadActiveCell(row, col, "reset");
+  }
+  target.focus();
+}
+
+function onLoadGridMouseOver(event: MouseEvent): void {
+  if (!state.loadMouseSelecting) return;
+  const target = event.target as HTMLElement | null;
+  if (!(target instanceof HTMLInputElement) || !target.classList.contains("load-cell")) return;
+  const row = Number(target.dataset.row);
+  const col = target.dataset.col as LoadSheetCol;
+  if (!Number.isFinite(row) || !LOAD_SHEET_COLS.includes(col) || !state.loadSelectionAnchor) return;
+  state.selectedLoadRange = makeLoadCellRange(state.loadSelectionAnchor, { row, col });
+  state.activeLoadCell = { row, col };
+  updateLoadRangeSelectionClasses();
+}
+
+function onLoadGridMouseUp(): void {
+  state.loadMouseSelecting = false;
+}
+
+function applyTextareaToLoadSheet(): void {
+  const rows = parseLoadSheetFromTextarea(refs.loadsText.value);
+  state.loadSheet = rows;
+  state.selectedLoadRows.clear();
+  state.loadSelectionAnchor = { row: 0, col: "name" };
+  state.selectedLoadRange = makeLoadCellRange(state.loadSelectionAnchor, state.loadSelectionAnchor);
+  state.activeLoadCell = { row: 0, col: "name" };
+  renderLoadSheetGrid();
+  syncLoadsTextareaFromSheet();
+  setStatus(tx("statusLoadSheetTextApplied"), "info");
+}
+
+async function importCsvToLoadSheet(): Promise<void> {
+  const file = refs.loadsFile.files?.[0];
+  if (!file) return;
+  const parsed = await parseLoadsCsvFile(file);
+  if (parsed.length === 0) return;
+  for (const row of parsed) {
+    state.loadSheet.push({
+      name: row.name,
+      pu: toCsvNumber(row.pu),
+      mux: toCsvNumber(row.mux),
+      muy: toCsvNumber(row.muy),
+    });
+  }
+  refs.loadsFile.value = "";
+  if (!state.loadSelectionAnchor) {
+    state.loadSelectionAnchor = { row: 0, col: "name" };
+  }
+  renderLoadSheetGrid();
+  syncLoadsTextareaFromSheet();
+  setStatus(`${tx("statusLoadSheetImported")} (+${parsed.length})`, "info");
+}
+
+async function copyLoadSheetSelection(): Promise<void> {
+  const range = state.selectedLoadRange ? normalizeLoadCellRange(state.selectedLoadRange) : null;
+  if (range) {
+    const lines: string[] = [];
+    for (let r = range.rowStart; r <= range.rowEnd; r++) {
+      const row = state.loadSheet[r];
+      const rowValues: string[] = [];
+      for (let c = range.colStart; c <= range.colEnd; c++) {
+        const col = loadColByIndex(c);
+        const raw = row?.[col] ?? "";
+        rowValues.push(isNumericLoadCol(col) ? normalizeNumberToken(raw) : raw.trim());
+      }
+      lines.push(rowValues.join("\t"));
+    }
+    const notAllEmpty = lines.some((line) => line.replace(/\t/g, "").trim().length > 0);
+    if (notAllEmpty) {
+      await writeClipboardText(lines.join("\n"));
+      setStatus(tx("statusLoadSheetCopied"), "info");
+      return;
+    }
+  }
+
+  const selected = Array.from(state.selectedLoadRows.values()).sort((a, b) => a - b);
+  const rowsToCopy: LoadSheetRow[] = [];
+  if (selected.length > 0) {
+    for (const idx of selected) {
+      if (idx >= 0 && idx < state.loadSheet.length && !isLoadRowBlank(state.loadSheet[idx])) {
+        rowsToCopy.push(state.loadSheet[idx]);
+      }
+    }
+  } else if (state.activeLoadCell && state.activeLoadCell.row < state.loadSheet.length) {
+    const row = state.loadSheet[state.activeLoadCell.row];
+    if (!isLoadRowBlank(row)) rowsToCopy.push(row);
+  } else {
+    rowsToCopy.push(...state.loadSheet.filter((row) => !isLoadRowBlank(row)));
+  }
+
+  if (rowsToCopy.length === 0) {
+    setStatus(tx("statusLoadSheetCopyEmpty"), "danger");
+    return;
+  }
+
+  const text = rowsToCopy
+    .map((row) => [row.name.trim(), normalizeNumberToken(row.pu), normalizeNumberToken(row.mux), normalizeNumberToken(row.muy)].join("\t"))
+    .join("\n");
+  await writeClipboardText(text);
+  setStatus(tx("statusLoadSheetCopied"), "info");
+}
+
+function validateLoadSheetRows(rows: LoadSheetRow[]): { loads: LoadCase[]; issues: LoadSheetValidationIssue[] } {
+  const issues: LoadSheetValidationIssue[] = [];
+  const loads: LoadCase[] = [];
+  let nextAuto = 1;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (isLoadRowBlank(row)) continue;
+
+    const name = row.name.trim() || `L${nextAuto++}`;
+    const numValues: Record<"pu" | "mux" | "muy", number> = { pu: 0, mux: 0, muy: 0 };
+    for (const col of NUMERIC_LOAD_COLS) {
+      const raw = row[col].trim();
+      if (raw.length === 0) {
+        issues.push({
+          row: i,
+          col,
+          message: state.lang === "en"
+            ? `Row ${i + 1} ${col} is empty`
+            : `Satır ${i + 1} ${col} boş`,
+        });
+        continue;
+      }
+      const parsed = Number(raw.replace(/\s+/g, "").replace(",", "."));
+      if (!Number.isFinite(parsed)) {
+        issues.push({
+          row: i,
+          col,
+          message: state.lang === "en"
+            ? `Row ${i + 1} ${col} is not a valid number`
+            : `Satır ${i + 1} ${col} sayısal değil`,
+        });
+      } else {
+        numValues[col] = parsed;
+      }
+    }
+
+    if (!issues.some((issue) => issue.row === i)) {
+      loads.push({
+        name,
+        pu: numValues.pu,
+        mux: numValues.mux,
+        muy: numValues.muy,
+      });
+    }
+  }
+  return { loads, issues };
+}
+
+function collectLoadsFromSheet(): LoadCase[] {
+  const { loads, issues } = validateLoadSheetRows(state.loadSheet);
+  state.loadIssues = issues;
+  renderLoadSheetGrid();
+  if (issues.length > 0) {
+    refreshLoadSheetValidation(true);
+    throw new Error(tx("statusLoadSheetInvalid"));
+  }
+  if (loads.length === 0) {
+    throw new Error(state.lang === "en" ? "Enter at least one load case." : "En az bir yük girin.");
+  }
+  return loads;
+}
+
 async function runAnalysis(): Promise<void> {
   const wasm = state.wasm;
   if (!wasm) throw new Error(state.lang === "en" ? "WASM is not ready yet." : "WASM henuz hazir degil.");
 
   setStatus(tx("statusPmmCalculating"), "info");
 
-  const textLoads = parseLoadsText(refs.loadsText.value);
-  const fileLoads = refs.loadsFile.files?.[0] ? await parseLoadsCsvFile(refs.loadsFile.files[0]) : [];
-  const loads = [...textLoads, ...fileLoads];
-  if (loads.length === 0) throw new Error(state.lang === "en" ? "Enter at least one load case." : "En az bir yuk girin.");
+  const loads = collectLoadsFromSheet();
 
   const input = collectInput(loads);
   state.lastInput = input;
@@ -1576,20 +2912,14 @@ async function runAnalysis(): Promise<void> {
     });
   }
 
-  const count = wasm.getPointCount();
-  const surface: PmmPoint[] = [];
-  for (let i = 0; i < count; i++) {
-    surface.push({
-      p: wasm.getPointP(i),
-      mx: wasm.getPointMx(i),
-      my: wasm.getPointMy(i),
-    });
-  }
+  const surface = readSurfacePointsFromWasm(wasm);
+  const nominalSurface = buildNominalSurface(wasm, input);
 
   const compliance = evaluateCompliance(input);
 
   state.results = results;
   state.surface = surface;
+  state.nominalSurface = nominalSurface;
   state.compliance = compliance;
   state.angleCount = input.nAngle;
   state.depthCount = input.nDepth;
@@ -1603,6 +2933,7 @@ async function runAnalysis(): Promise<void> {
   refs.exportResults.disabled = false;
   refs.exportSurface.disabled = false;
   refs.exportReport.disabled = false;
+  refs.exportReportPdf.disabled = false;
 
   const maxDcr = Math.max(...results.map((r) => r.dcr));
   const failCount = compliance.filter((c) => c.status === "fail").length;
@@ -1659,14 +2990,23 @@ function calcLongitudinalRatioPct(input: AppInput): number {
   return (nBars * barAreaM2 / areaM2) * 100.0;
 }
 
-function configureWasm(wasm: WasmExports, input: AppInput): number {
+interface DesignFactorOverride {
+  phiP: number;
+  phiM: number;
+  pCutoffRatio: number;
+}
+
+function configureWasm(wasm: WasmExports, input: AppInput, designOverride?: DesignFactorOverride): number {
   const tieDiaM = input.tieDiaMm / 1000.0;
   const barDiaM = input.barDiaMm / 1000.0;
   const tieSpacingConfM = input.tieSpacingConfMm / 1000.0;
   const strengths = resolveDesignStrengths(input);
   const concreteModelId = input.concreteModel === "mander_core_cover" ? 1 : 0;
+  const phiP = designOverride?.phiP ?? input.phiP;
+  const phiM = designOverride?.phiM ?? input.phiM;
+  const pCutoffRatio = designOverride?.pCutoffRatio ?? input.pCutoffRatio;
   wasm.setConcreteModel(concreteModelId, tieSpacingConfM);
-  wasm.setDesignFactors(input.phiP, input.phiM, input.pCutoffRatio);
+  wasm.setDesignFactors(phiP, phiM, pCutoffRatio);
 
   if (input.shape === "rect") {
     return wasm.configureRect(
@@ -2037,28 +3377,55 @@ function evaluateCompliance(input: AppInput): ComplianceCheck[] {
     );
   }
 
-  if (input.shape === "rect") {
-    const edgeM = input.coverToCenter
-      ? input.coverM
-      : input.coverM + (input.tieDiaMm / 1000.0) + (input.barDiaMm / 2000.0);
+  const edgeM = input.coverToCenter
+    ? input.coverM
+    : input.coverM + (input.tieDiaMm / 1000.0) + (input.barDiaMm / 2000.0);
 
+  let sCenterMax = Number.POSITIVE_INFINITY;
+  let sCenterMin = Number.POSITIVE_INFINITY;
+  let spacingValueText = "";
+
+  if (input.shape === "rect") {
     const xSpanMm = Math.max(0, (input.widthM - 2.0 * edgeM) * 1000.0);
     const ySpanMm = Math.max(0, (input.heightM - 2.0 * edgeM) * 1000.0);
     const sx = input.barsX > 1 ? xSpanMm / (input.barsX - 1) : Number.POSITIVE_INFINITY;
     const sy = input.barsY > 1 ? ySpanMm / (input.barsY - 1) : Number.POSITIVE_INFINITY;
-    const smax = Math.max(sx, sy);
-
-    addCheck(
-      out,
-      "TS500",
-      "7.4.1",
-      "Etriye/cirozla tutulan boyuna donati araligi",
-      smax <= 300,
-      `${fmt(smax, 1)} mm`,
-      "<= 300 mm",
-      "TS500 s.25"
-    );
+    sCenterMax = Math.max(sx, sy);
+    sCenterMin = Math.min(sx, sy);
+    spacingValueText = `(sx=${fmt(sx, 1)}, sy=${fmt(sy, 1)})`;
+  } else {
+    const rBarM = 0.5 * input.diameterM - edgeM;
+    const sArcMm = rBarM > 0 && nBars > 0
+      ? (2.0 * Math.PI * rBarM * 1000.0) / nBars
+      : Number.POSITIVE_INFINITY;
+    sCenterMax = sArcMm;
+    sCenterMin = sArcMm;
+    spacingValueText = `(s_arc=${fmt(sArcMm, 1)} mm)`;
   }
+
+  addCheck(
+    out,
+    "TS500",
+    "7.4.1",
+    "Boyuna donati araligi ust sinir (komsu barlar)",
+    sCenterMax <= 300,
+    `smax=${fmt(sCenterMax, 1)} mm ${spacingValueText}`,
+    "<= 300 mm",
+    "TS500 s.25"
+  );
+
+  const sClearMin = sCenterMin - input.barDiaMm;
+  const sClearLimit = Math.max(1.5 * input.barDiaMm, 40.0);
+  addCheck(
+    out,
+    "TS500",
+    "7.4.1",
+    "Boyuna donati net araligi alt sinir",
+    sClearMin >= sClearLimit,
+    `s_net,min=${fmt(sClearMin, 1)} mm`,
+    `>= ${fmt(sClearLimit, 1)} mm`,
+    "TS500 s.25 (agrega dane capi kontrolu ayri degerlendirilmelidir)"
+  );
 
   if (input.codeMode === "ts500_tbdy") {
     addCheck(
@@ -2291,6 +3658,8 @@ interface PlotPalette {
   bg: string;
   cloud: string;
   mesh: string;
+  nominalCloud: string;
+  nominalMesh: string;
   loadOk: string;
   loadNg: string;
   border: string;
@@ -2307,6 +3676,8 @@ function getPlotPalette(): PlotPalette {
       bg: "#f7fbff",
       cloud: "rgba(26, 133, 142, 0.45)",
       mesh: "rgba(42, 102, 120, 0.28)",
+      nominalCloud: "rgba(73, 116, 220, 0.34)",
+      nominalMesh: "rgba(62, 104, 198, 0.38)",
       loadOk: "#1f9d55",
       loadNg: "#d84b4b",
       border: "rgba(19, 50, 64, 0.45)",
@@ -2321,6 +3692,8 @@ function getPlotPalette(): PlotPalette {
     bg: "#071018",
     cloud: "rgba(89, 195, 195, 0.45)",
     mesh: "rgba(134, 202, 210, 0.24)",
+    nominalCloud: "rgba(113, 149, 255, 0.30)",
+    nominalMesh: "rgba(144, 170, 255, 0.36)",
     loadOk: "#8ff7a7",
     loadNg: "#ff7f7f",
     border: "rgba(240, 255, 255, 0.75)",
@@ -2395,10 +3768,48 @@ function readCurrentPSignFactor(): number {
   return readCurrentPSignMode() === "compression_negative" ? -1 : 1;
 }
 
+function pSignFactorForMode(mode: PSignMode): number {
+  return mode === "compression_negative" ? -1 : 1;
+}
+
 function readCurrentPVisualScale(): number {
   const v = Number(refs.pVisualScale.value);
   if (!Number.isFinite(v)) return 0.55;
   return Math.min(1.5, Math.max(0.2, v));
+}
+
+function readCurrentSurfaceOpacity(): number {
+  const v = Number(refs.surfaceOpacity.value);
+  if (!Number.isFinite(v)) return 0.88;
+  return Math.min(1.0, Math.max(0.15, v));
+}
+
+function renderSurfaceOpacityValue(): void {
+  refs.surfaceOpacityValue.textContent = readCurrentSurfaceOpacity().toFixed(2);
+}
+
+function readSurfacePointsFromWasm(wasm: WasmExports): PmmPoint[] {
+  const count = wasm.getPointCount();
+  const surface: PmmPoint[] = [];
+  for (let i = 0; i < count; i++) {
+    surface.push({
+      p: wasm.getPointP(i),
+      mx: wasm.getPointMx(i),
+      my: wasm.getPointMy(i),
+    });
+  }
+  return surface;
+}
+
+function buildNominalSurface(wasm: WasmExports, input: AppInput): PmmPoint[] {
+  const ok = configureWasm(wasm, input, { phiP: 1, phiM: 1, pCutoffRatio: input.pCutoffRatio });
+  if (ok !== 1) return [];
+  const nominalSurface = readSurfacePointsFromWasm(wasm);
+  const restoreOk = configureWasm(wasm, input);
+  if (restoreOk !== 1) {
+    throw new Error(state.lang === "en" ? "Failed to restore design PMM configuration." : "Tasarım PMM konfigürasyonu geri yüklenemedi.");
+  }
+  return nominalSurface;
 }
 
 function prepareCanvasContext(canvas: HTMLCanvasElement): { ctx: CanvasRenderingContext2D; w: number; h: number } | null {
@@ -2431,11 +3842,15 @@ function renderPlot(surface: PmmPoint[], results: ResultRow[]): void {
 
   const projection = refs.projection.value;
   const pSignFactor = readCurrentPSignFactor();
+  const showNominalSurface = state.showNominalSurface && state.nominalSurface.length > 0;
   const series = surface.map((p) => pickProjection(p, projection, pSignFactor));
+  const nominalSeries = showNominalSurface
+    ? state.nominalSurface.map((p) => pickProjection(p, projection, pSignFactor))
+    : [];
   const loads = results.map((r) => pickProjection({ p: r.pu, mx: r.mux, my: r.muy }, projection, pSignFactor));
 
-  const xs = [...series.map((v) => v.x), ...loads.map((v) => v.x)];
-  const ys = [...series.map((v) => v.y), ...loads.map((v) => v.y)];
+  const xs = [...series.map((v) => v.x), ...nominalSeries.map((v) => v.x), ...loads.map((v) => v.x)];
+  const ys = [...series.map((v) => v.y), ...nominalSeries.map((v) => v.y), ...loads.map((v) => v.y)];
   const xMin = Math.min(...xs);
   const xMax = Math.max(...xs);
   const yMin = Math.min(...ys);
@@ -2464,10 +3879,19 @@ function renderPlot(surface: PmmPoint[], results: ResultRow[]): void {
   drawGrid(ctx, xTicks, yTicks, sx, sy, plotLeft, plotTop, plotRight, plotBottom, pal);
 
   const shellPointCount = state.angleCount * state.depthCount;
-  if (shellPointCount > 0 && shellPointCount <= series.length && state.angleCount >= 3 && state.depthCount >= 2) {
-    const shellSeries = series.slice(0, shellPointCount);
-    ctx.strokeStyle = pal.mesh;
+  const drawSurfaceSeries = (
+    sourceSeries: Array<{ x: number; y: number }>,
+    meshColor: string,
+    cloudColor: string,
+    pointRadius: number,
+    dash: number[] = []
+  ): void => {
+    if (!(shellPointCount > 0 && shellPointCount <= sourceSeries.length && state.angleCount >= 3 && state.depthCount >= 2)) return;
+    const shellSeries = sourceSeries.slice(0, shellPointCount);
+    ctx.save();
+    ctx.strokeStyle = meshColor;
     ctx.lineWidth = 0.9;
+    ctx.setLineDash(dash);
 
     for (let ai = 0; ai < state.angleCount; ai++) {
       ctx.beginPath();
@@ -2489,14 +3913,20 @@ function renderPlot(surface: PmmPoint[], results: ResultRow[]): void {
       }
       ctx.stroke();
     }
-  }
+    ctx.restore();
 
-  ctx.fillStyle = pal.cloud;
-  for (const p of series) {
-    ctx.beginPath();
-    ctx.arc(sx(p.x), sy(p.y), 1.4, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillStyle = cloudColor;
+    for (const p of sourceSeries) {
+      ctx.beginPath();
+      ctx.arc(sx(p.x), sy(p.y), pointRadius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  };
+
+  if (showNominalSurface) {
+    drawSurfaceSeries(nominalSeries, pal.nominalMesh, pal.nominalCloud, 1.2, [5, 4]);
   }
+  drawSurfaceSeries(series, pal.mesh, pal.cloud, 1.4);
 
   for (let i = 0; i < loads.length; i++) {
     const p = loads[i];
@@ -2525,7 +3955,6 @@ function renderPlot(surface: PmmPoint[], results: ResultRow[]): void {
   ctx.fillText(yLabel, 0, 0);
   ctx.restore();
 }
-
 function renderPlot3d(surface: PmmPoint[], results: ResultRow[]): void {
   const host = refs.plot3d;
   const angleCount = state.angleCount;
@@ -2539,39 +3968,81 @@ function renderPlot3d(surface: PmmPoint[], results: ResultRow[]): void {
 
   const pSignFactor = readCurrentPSignFactor();
   const pVisualScale = readCurrentPVisualScale();
-
-  const x: number[][] = [];
-  const y: number[][] = [];
-  const z: number[][] = [];
-  for (let ai = 0; ai < angleCount; ai++) {
-    const rowX: number[] = [];
-    const rowY: number[] = [];
-    const rowZ: number[] = [];
-    for (let di = 0; di < depthCount; di++) {
-      const idx = ai * depthCount + di;
-      const p = surface[idx];
-      rowX.push(p.mx);
-      rowY.push(p.my);
-      rowZ.push(p.p * pSignFactor);
+  const surfaceOpacity = readCurrentSurfaceOpacity();
+  const showNominalSurface = state.showNominalSurface && state.nominalSurface.length >= shellPointCount;
+  const buildSurfaceGrid = (source: PmmPoint[]): { x: number[][]; y: number[][]; z: number[][] } | null => {
+    if (source.length < shellPointCount) return null;
+    const x: number[][] = [];
+    const y: number[][] = [];
+    const z: number[][] = [];
+    for (let ai = 0; ai < angleCount; ai++) {
+      const rowX: number[] = [];
+      const rowY: number[] = [];
+      const rowZ: number[] = [];
+      for (let di = 0; di < depthCount; di++) {
+        const idx = ai * depthCount + di;
+        const p = source[idx];
+        rowX.push(p.mx);
+        rowY.push(p.my);
+        rowZ.push(p.p * pSignFactor);
+      }
+      x.push(rowX);
+      y.push(rowY);
+      z.push(rowZ);
     }
-    x.push(rowX);
-    y.push(rowY);
-    z.push(rowZ);
+    if (x.length > 0) {
+      x.push([...x[0]]);
+      y.push([...y[0]]);
+      z.push([...z[0]]);
+    }
+    return { x, y, z };
+  };
+
+  const designGrid = buildSurfaceGrid(surface);
+  if (!designGrid) {
+    host.innerHTML = "";
+    return;
   }
 
-  if (x.length > 0) {
-    x.push([...x[0]]);
-    y.push([...y[0]]);
-    z.push([...z[0]]);
+  const traces: any[] = [];
+  if (showNominalSurface) {
+    const nominalGrid = buildSurfaceGrid(state.nominalSurface);
+    if (nominalGrid) {
+      traces.push({
+        type: "surface",
+        x: nominalGrid.x,
+        y: nominalGrid.y,
+        z: nominalGrid.z,
+        showscale: false,
+        opacity: Math.max(0.18, Math.min(0.42, surfaceOpacity * 0.5)),
+        colorscale: [
+          [0, "#4d79ff"],
+          [0.55, "#6c9bff"],
+          [1, "#a9c2ff"],
+        ],
+        contours: {
+          z: {
+            show: true,
+            usecolormap: false,
+            color: "rgba(220, 232, 255, 0.34)",
+            width: 1,
+          },
+        },
+        hovertemplate:
+          state.lang === "en"
+            ? "Nominal PMM<br>P: %{z:.1f} kN<br>Mx: %{x:.1f} kNm<br>My: %{y:.1f} kNm<extra></extra>"
+            : "Nominal PMM<br>P: %{z:.1f} kN<br>Mx: %{x:.1f} kNm<br>My: %{y:.1f} kNm<extra></extra>",
+      });
+    }
   }
 
-  const surfaceTrace = {
+  traces.push({
     type: "surface",
-    x,
-    y,
-    z,
+    x: designGrid.x,
+    y: designGrid.y,
+    z: designGrid.z,
     showscale: false,
-    opacity: 0.88,
+    opacity: surfaceOpacity,
     colorscale: [
       [0, "#d1ae62"],
       [0.55, "#e2bf72"],
@@ -2587,11 +4058,11 @@ function renderPlot3d(surface: PmmPoint[], results: ResultRow[]): void {
     },
     hovertemplate:
       state.lang === "en"
-        ? "P: %{z:.1f} kN<br>Mx: %{x:.1f} kNm<br>My: %{y:.1f} kNm<extra></extra>"
-        : "P: %{z:.1f} kN<br>Mx: %{x:.1f} kNm<br>My: %{y:.1f} kNm<extra></extra>",
-  };
+        ? "Design PMM<br>P: %{z:.1f} kN<br>Mx: %{x:.1f} kNm<br>My: %{y:.1f} kNm<extra></extra>"
+        : "Tasarım PMM<br>P: %{z:.1f} kN<br>Mx: %{x:.1f} kNm<br>My: %{y:.1f} kNm<extra></extra>",
+  });
 
-  const loadTrace = {
+  traces.push({
     type: "scatter3d",
     mode: "markers+text",
     x: results.map((r) => r.mux),
@@ -2609,7 +4080,7 @@ function renderPlot3d(surface: PmmPoint[], results: ResultRow[]): void {
       state.lang === "en"
         ? "%{text}<br>Pu: %{z:.1f} kN<br>Mux: %{x:.1f} kNm<br>Muy: %{y:.1f} kNm<extra></extra>"
         : "%{text}<br>Pu: %{z:.1f} kN<br>Mux: %{x:.1f} kNm<br>Muy: %{y:.1f} kNm<extra></extra>",
-  };
+  });
 
   const sceneBg = state.theme === "light" ? "#f7fbff" : "#06111a";
   const sceneColor = state.theme === "light" ? "#17323d" : "#cde6eb";
@@ -2657,12 +4128,11 @@ function renderPlot3d(surface: PmmPoint[], results: ResultRow[]): void {
   };
 
   try {
-    (Plotly as any).react(host, [surfaceTrace, loadTrace], layout, config);
+    (Plotly as any).react(host, traces, layout, config);
   } catch (error) {
     host.textContent = `${tx("plot3dError")}: ${String(error)}`;
   }
 }
-
 function normalizeDeg(v: number): number {
   if (!Number.isFinite(v)) return 0;
   let a = v % 360;
@@ -2958,30 +4428,6 @@ function labelsForProjection(projection: string): [string, string] {
   return ["Mx (kNm)", pLabel];
 }
 
-function parseLoadsText(raw: string): LoadCase[] {
-  const rows = raw
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-  const out: LoadCase[] = [];
-  for (const line of rows) {
-    const parts = line.split(",").map((p) => p.trim());
-    if (parts.length < 3 || parts.length > 4) {
-      throw new Error(`Yuk satiri gecersiz: ${line}`);
-    }
-    const hasName = parts.length === 4;
-    const name = hasName ? parts[0] : `L${out.length + 1}`;
-    const offset = hasName ? 1 : 0;
-    out.push({
-      name,
-      pu: n(parts[offset]),
-      mux: n(parts[offset + 1]),
-      muy: n(parts[offset + 2]),
-    });
-  }
-  return out;
-}
-
 async function parseLoadsCsvFile(file: File): Promise<LoadCase[]> {
   const text = await file.text();
   const lines = text
@@ -3124,8 +4570,8 @@ function buildAxisExportData(): AxisExportData | null {
   };
 }
 
-function downloadText(name: string, text: string): void {
-  const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+function downloadText(name: string, text: string, mime = "text/csv;charset=utf-8"): void {
+  const blob = new Blob([text], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -3175,33 +4621,20 @@ async function writeClipboardText(text: string): Promise<void> {
 // Moment–Curvature Analysis
 // ---------------------------------------------------------------------------
 
-async function runMomentCurvature(): Promise<void> {
-  const wasm = state.wasm;
-  if (!wasm) throw new Error(tx("statusMcNoPmm"));
-  if (state.surface.length === 0) throw new Error(tx("statusMcNoPmm"));
-  if (!state.lastInput) throw new Error(tx("statusMcNoPmm"));
-
-  setStatus(tx("statusMcRunning"), "info");
-
-  const input = state.lastInput;
-  const pSignFactor = readCurrentPSignFactor();
-  const pKnRaw = Number(refs.mcP.value.trim().replace(",", "."));
-  if (!Number.isFinite(pKnRaw)) throw new Error(tx("statusMcNoPmm"));
-  // Convert user P to WASM convention (positive = compression)
+function computeMcDataAtAngle(
+  wasm: WasmExports,
+  input: AppInput,
+  pKnRaw: number,
+  angleDeg: number,
+  nSteps: number,
+  pSignFactor: number
+): McData {
   const pKn = pKnRaw * pSignFactor;
-
-  const angleDeg = Number(refs.mcAngle.value.trim().replace(",", ".")) || 0;
   const angleRad = (angleDeg * Math.PI) / 180;
-  // angle=0° → Mx bending: nx=sin(0)=0, ny=cos(0)=1 → horizontal NA
-  // angle=90° → My bending: nx=sin(90°)=1, ny=cos(90°)=0 → vertical NA
   const nx = Math.sin(angleRad);
   const ny = Math.cos(angleRad);
-
-  const nSteps = Math.max(20, Math.min(400, Math.round(Number(refs.mcSteps.value) || 80)));
-
   const strengths = resolveDesignStrengths(input);
   const barDiaM = input.barDiaMm / 1000.0;
-
   const count = wasm.buildMomentCurvature(
     pKn,
     nx,
@@ -3214,8 +4647,9 @@ async function runMomentCurvature(): Promise<void> {
     input.es,
     barDiaM
   );
-
-  if (count === 0) throw new Error(tx("statusMcNoPoints"));
+  if (count === 0) {
+    throw new Error(tx("statusMcNoPoints"));
+  }
 
   const tempPhi: number[] = [];
   const tempMom: number[] = [];
@@ -3233,25 +4667,16 @@ async function runMomentCurvature(): Promise<void> {
     if (m > peakMoment) peakMoment = m;
   }
 
-  // Determine concrete ultimate strain for truncation
   const epsCuLimit = input.epsCu > 0 ? input.epsCu : 0.003;
-  // For Mander confined model, use the higher confined εcu from the model
-  const epsCuCutoff = input.concreteModel === "mander_core_cover" ? epsCuLimit * 2.5 : epsCuLimit;
-
-  // First pass: find last valid index (where εc <= εcu)
-  // Allow going slightly beyond εcu to capture the descending branch start
+  const epsCuCutoff = epsCuLimit * 2.5;
   let lastConcreteIdx = count - 1;
-  let firstExceedIdx = -1;
   for (let i = 0; i < count; i++) {
-    if (tempEpsC[i] > epsCuCutoff && firstExceedIdx < 0) {
-      firstExceedIdx = i;
-      // Include a few points past εcu to show the knee
+    if (tempEpsC[i] > epsCuCutoff) {
       lastConcreteIdx = Math.min(count - 1, i + 10);
       break;
     }
   }
 
-  // Second pass: also check for moment drop below 80% after peak
   const minAllowedMoment = peakMoment > 0 ? peakMoment * 0.5 : 0;
   let peakFound = false;
 
@@ -3263,22 +4688,41 @@ async function runMomentCurvature(): Promise<void> {
   const endIdx = Math.min(count, lastConcreteIdx + 1);
   for (let i = 0; i < endIdx; i++) {
     const m = tempMom[i];
-
     phi.push(tempPhi[i]);
     moment.push(m);
     neutralAxis.push(tempNA[i]);
     epsC.push(tempEpsC[i]);
     epsS.push(tempEpsS[i]);
-    
     if (m >= peakMoment * 0.99) peakFound = true;
-    
-    // Stop at 50% point on descending branch (severe drop = section failed)
-    if (peakFound && m < minAllowedMoment) {
-      break;
-    }
+    if (peakFound && m < minAllowedMoment) break;
   }
 
-  state.mcData = { phi, moment, neutralAxis, epsC, epsS };
+  if (phi.length > 0 && (phi[0] > 1e-12 || moment[0] > 1e-9)) {
+    phi.unshift(0);
+    moment.unshift(0);
+    neutralAxis.unshift(neutralAxis[0]);
+    epsC.unshift(0);
+    epsS.unshift(0);
+  }
+
+  return { phi, moment, neutralAxis, epsC, epsS };
+}
+
+async function runMomentCurvature(): Promise<void> {
+  const wasm = state.wasm;
+  if (!wasm) throw new Error(tx("statusMcNoPmm"));
+  if (state.surface.length === 0) throw new Error(tx("statusMcNoPmm"));
+  if (!state.lastInput) throw new Error(tx("statusMcNoPmm"));
+
+  setStatus(tx("statusMcRunning"), "info");
+
+  const input = state.lastInput;
+  const pSignFactor = readCurrentPSignFactor();
+  const pKnRaw = Number(refs.mcP.value.trim().replace(",", "."));
+  if (!Number.isFinite(pKnRaw)) throw new Error(tx("statusMcNoPmm"));
+  const angleDeg = Number(refs.mcAngle.value.trim().replace(",", ".")) || 0;
+  const nSteps = Math.max(20, Math.min(400, Math.round(Number(refs.mcSteps.value) || 80)));
+  state.mcData = computeMcDataAtAngle(wasm, input, pKnRaw, angleDeg, nSteps, pSignFactor);
   renderMcPlot(state.mcData);
   setStatus(tx("statusMcDone"), "info");
 }
@@ -3496,73 +4940,955 @@ function renderMcDataTable(data: McData): void {
     </table>`;
 }
 
-function exportWordReport(): void {
-  const axis = buildAxisExportData();
-  if (!axis || state.results.length === 0) {
-    setStatus(tx("statusReportExportEmpty"), "danger");
+function collectReportMeta(): ReportMeta {
+  const sections = collectReportSectionOptions();
+  return {
+    company: refs.reportCompany.value.trim(),
+    documentTitle: refs.reportDocTitle.value.trim(),
+    project: refs.reportProject.value.trim(),
+    client: refs.reportClient.value.trim(),
+    preparedBy: refs.reportPreparedBy.value.trim(),
+    checkedBy: refs.reportCheckedBy.value.trim(),
+    revision: refs.reportRevision.value.trim() || "R00",
+    reportDate: refs.reportDate.value.trim(),
+    logoDataUrl: state.reportLogoDataUrl,
+    sections,
+  };
+}
+
+function collectReportSectionOptions(): ReportSectionOptions {
+  return {
+    cover: refs.reportSecCover.checked,
+    summary: refs.reportSecSummary.checked,
+    visuals: refs.reportSecVisuals.checked,
+    loadInput: refs.reportSecLoadInput.checked,
+    loadResults: refs.reportSecLoadResults.checked,
+    compliance: refs.reportSecCompliance.checked,
+    mphi: refs.reportSecMphi.checked,
+    appendix: refs.reportSecAppendix.checked,
+  };
+}
+
+function hasAnyReportSection(sections: ReportSectionOptions): boolean {
+  return sections.cover || sections.summary || sections.visuals || sections.loadInput || sections.loadResults || sections.compliance || sections.mphi || sections.appendix;
+}
+
+async function fileToDataUrl(file: File): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error ?? new Error("Logo dosyası okunamadı."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleReportLogoSelection(): Promise<void> {
+  const file = refs.reportLogo.files?.[0];
+  if (!file) {
+    state.reportLogoDataUrl = "";
+    refs.reportLogoName.textContent = tx("labelReportLogoNoFile");
     return;
   }
+  if (!file.type.startsWith("image/")) {
+    throw new Error(state.lang === "en" ? "Logo must be an image file." : "Logo dosyası bir görsel olmalıdır.");
+  }
+  state.reportLogoDataUrl = await fileToDataUrl(file);
+  refs.reportLogoName.textContent = file.name;
+  setStatus(tx("statusReportLogoLoaded"), "info");
+}
 
-  const mxRowsHtml = axis.mx
-    .map((r, i) => `<tr><td>${i + 1}</td><td>${fmt(r.p, 1)}</td><td>${fmt(r.mPos, 1)}</td><td>${fmt(r.mNeg, 1)}</td></tr>`)
+function setSelectValue(select: HTMLSelectElement, value: string, fallback: string): void {
+  const safe = Array.from(select.options).some((option) => option.value === value) ? value : fallback;
+  select.value = safe;
+}
+
+function setTextValue(
+  input: HTMLInputElement | HTMLTextAreaElement,
+  value: string | undefined,
+  fallback = ""
+): void {
+  input.value = typeof value === "string" ? value : fallback;
+}
+
+function sanitizeProjectFilename(raw: string): string {
+  const trimmed = raw.trim();
+  const base = trimmed.length > 0 ? trimmed : "pmmstudio-project";
+  return base
+    .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "-")
+    .replace(/\s+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 72) || "pmmstudio-project";
+}
+
+function collectProjectFile(): ProjectFileV1 {
+  return {
+    schema: "pmmstudio-project",
+    version: 1,
+    savedAt: new Date().toISOString(),
+    input: {
+      codeMode: refs.codeMode.value as CodeMode,
+      concreteModel: refs.concreteModel.value as ConcreteModel,
+      shape: refs.shape.value as Shape,
+      width: refs.width.value,
+      height: refs.height.value,
+      diameter: refs.diameter.value,
+      barsX: refs.barsX.value,
+      barsY: refs.barsY.value,
+      bars: refs.bars.value,
+      cover: refs.cover.value,
+      tieDia: refs.tieDia.value,
+      barDia: refs.barDia.value,
+      tieSpacingConf: refs.tieSpacingConf.value,
+      tieSpacingMid: refs.tieSpacingMid.value,
+      coverToCenter: refs.coverToCenter.checked,
+      useExpectedStrength: refs.useExpectedStrength.checked,
+      expectedFckFactor: refs.expectedFckFactor.value,
+      expectedFykFactor: refs.expectedFykFactor.value,
+      fck: refs.fck.value,
+      fyk: refs.fyk.value,
+      gammaC: refs.gammaC.value,
+      gammaS: refs.gammaS.value,
+      es: refs.es.value,
+      epsCu: refs.epsCu.value,
+      mesh: refs.mesh.value,
+      nAngle: refs.nAngle.value,
+      nDepth: refs.nDepth.value,
+      phiP: refs.phiP.value,
+      phiM: refs.phiM.value,
+      pCutoffRatio: refs.pCutoffRatio.value,
+      pVisualScale: refs.pVisualScale.value,
+      surfaceOpacity: refs.surfaceOpacity.value,
+      pSign: refs.pSign.value as PSignMode,
+      projection: refs.projection.value,
+      showNominalSurface: refs.showNominalSurface.checked,
+      sliceAngle: refs.sliceAngle.value,
+      sliceHideZero: refs.sliceHideZero.checked,
+      mcP: refs.mcP.value,
+      mcAngle: refs.mcAngle.value,
+      mcSteps: refs.mcSteps.value,
+      controlsOpen: refs.controlsAccordion.open,
+    },
+    loadSheet: state.loadSheet.map((row) => ({ ...row })),
+    report: {
+      company: refs.reportCompany.value.trim(),
+      documentTitle: refs.reportDocTitle.value.trim(),
+      project: refs.reportProject.value.trim(),
+      client: refs.reportClient.value.trim(),
+      preparedBy: refs.reportPreparedBy.value.trim(),
+      checkedBy: refs.reportCheckedBy.value.trim(),
+      revision: refs.reportRevision.value.trim(),
+      reportDate: refs.reportDate.value.trim(),
+      logoDataUrl: state.reportLogoDataUrl,
+      logoName: refs.reportLogoName.textContent?.trim() ?? "",
+      sections: collectReportSectionOptions(),
+    },
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readRecordString(record: Record<string, unknown>, key: string, fallback = ""): string {
+  const value = record[key];
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return fallback;
+}
+
+function readRecordBoolean(record: Record<string, unknown>, key: string, fallback = false): boolean {
+  const value = record[key];
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function parseProjectFile(text: string): ProjectFileV1 {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    throw new Error(tx("statusProjectInvalid"));
+  }
+
+  if (!isRecord(raw) || raw.schema !== "pmmstudio-project") {
+    throw new Error(tx("statusProjectInvalid"));
+  }
+
+  const inputRaw = isRecord(raw.input) ? raw.input : {};
+  const reportRaw = isRecord(raw.report) ? raw.report : {};
+  const sectionsRaw = isRecord(reportRaw.sections) ? reportRaw.sections : {};
+  const loadSheetRaw = Array.isArray(raw.loadSheet) ? raw.loadSheet : [];
+
+  const codeModeRaw = readRecordString(inputRaw, "codeMode", "ts500_tbdy");
+  const concreteModelRaw = readRecordString(inputRaw, "concreteModel", "mander_core_cover");
+  const shapeRaw = readRecordString(inputRaw, "shape", "rect");
+  const pSignRaw = readRecordString(inputRaw, "pSign", "compression_positive");
+
+  const loadSheet = loadSheetRaw
+    .filter((row): row is Record<string, unknown> => isRecord(row))
+    .map((row) => ({
+      name: readRecordString(row, "name"),
+      pu: readRecordString(row, "pu"),
+      mux: readRecordString(row, "mux"),
+      muy: readRecordString(row, "muy"),
+    }));
+
+  return {
+    schema: "pmmstudio-project",
+    version: 1,
+    savedAt: typeof raw.savedAt === "string" ? raw.savedAt : new Date().toISOString(),
+    input: {
+      codeMode: codeModeRaw === "ts500" || codeModeRaw === "ts500_tbdy" || codeModeRaw === "aci318_19" ? codeModeRaw : "ts500_tbdy",
+      concreteModel: concreteModelRaw === "ts500_block" || concreteModelRaw === "mander_core_cover" ? concreteModelRaw : "mander_core_cover",
+      shape: shapeRaw === "rect" || shapeRaw === "circle" ? shapeRaw : "rect",
+      width: readRecordString(inputRaw, "width", refs.width.value),
+      height: readRecordString(inputRaw, "height", refs.height.value),
+      diameter: readRecordString(inputRaw, "diameter", refs.diameter.value),
+      barsX: readRecordString(inputRaw, "barsX", refs.barsX.value),
+      barsY: readRecordString(inputRaw, "barsY", refs.barsY.value),
+      bars: readRecordString(inputRaw, "bars", refs.bars.value),
+      cover: readRecordString(inputRaw, "cover", refs.cover.value),
+      tieDia: readRecordString(inputRaw, "tieDia", refs.tieDia.value),
+      barDia: readRecordString(inputRaw, "barDia", refs.barDia.value),
+      tieSpacingConf: readRecordString(inputRaw, "tieSpacingConf", refs.tieSpacingConf.value),
+      tieSpacingMid: readRecordString(inputRaw, "tieSpacingMid", refs.tieSpacingMid.value),
+      coverToCenter: readRecordBoolean(inputRaw, "coverToCenter", refs.coverToCenter.checked),
+      useExpectedStrength: readRecordBoolean(inputRaw, "useExpectedStrength", refs.useExpectedStrength.checked),
+      expectedFckFactor: readRecordString(inputRaw, "expectedFckFactor", refs.expectedFckFactor.value),
+      expectedFykFactor: readRecordString(inputRaw, "expectedFykFactor", refs.expectedFykFactor.value),
+      fck: readRecordString(inputRaw, "fck", refs.fck.value),
+      fyk: readRecordString(inputRaw, "fyk", refs.fyk.value),
+      gammaC: readRecordString(inputRaw, "gammaC", refs.gammaC.value),
+      gammaS: readRecordString(inputRaw, "gammaS", refs.gammaS.value),
+      es: readRecordString(inputRaw, "es", refs.es.value),
+      epsCu: readRecordString(inputRaw, "epsCu", refs.epsCu.value),
+      mesh: readRecordString(inputRaw, "mesh", refs.mesh.value),
+      nAngle: readRecordString(inputRaw, "nAngle", refs.nAngle.value),
+      nDepth: readRecordString(inputRaw, "nDepth", refs.nDepth.value),
+      phiP: readRecordString(inputRaw, "phiP", refs.phiP.value),
+      phiM: readRecordString(inputRaw, "phiM", refs.phiM.value),
+      pCutoffRatio: readRecordString(inputRaw, "pCutoffRatio", refs.pCutoffRatio.value),
+      pVisualScale: readRecordString(inputRaw, "pVisualScale", refs.pVisualScale.value),
+      surfaceOpacity: readRecordString(inputRaw, "surfaceOpacity", refs.surfaceOpacity.value),
+      pSign: pSignRaw === "compression_negative" ? "compression_negative" : "compression_positive",
+      projection: readRecordString(inputRaw, "projection", refs.projection.value),
+      showNominalSurface: readRecordBoolean(inputRaw, "showNominalSurface", refs.showNominalSurface.checked),
+      sliceAngle: readRecordString(inputRaw, "sliceAngle", refs.sliceAngle.value),
+      sliceHideZero: readRecordBoolean(inputRaw, "sliceHideZero", refs.sliceHideZero.checked),
+      mcP: readRecordString(inputRaw, "mcP", refs.mcP.value),
+      mcAngle: readRecordString(inputRaw, "mcAngle", refs.mcAngle.value),
+      mcSteps: readRecordString(inputRaw, "mcSteps", refs.mcSteps.value),
+      controlsOpen: readRecordBoolean(inputRaw, "controlsOpen", refs.controlsAccordion.open),
+    },
+    loadSheet: loadSheet.length > 0 ? loadSheet : [emptyLoadSheetRow("L1")],
+    report: {
+      company: readRecordString(reportRaw, "company"),
+      documentTitle: readRecordString(reportRaw, "documentTitle"),
+      project: readRecordString(reportRaw, "project"),
+      client: readRecordString(reportRaw, "client"),
+      preparedBy: readRecordString(reportRaw, "preparedBy"),
+      checkedBy: readRecordString(reportRaw, "checkedBy"),
+      revision: readRecordString(reportRaw, "revision", "R00"),
+      reportDate: readRecordString(reportRaw, "reportDate"),
+      logoDataUrl: readRecordString(reportRaw, "logoDataUrl"),
+      logoName: readRecordString(reportRaw, "logoName"),
+      sections: {
+        cover: readRecordBoolean(sectionsRaw, "cover", true),
+        summary: readRecordBoolean(sectionsRaw, "summary", true),
+        visuals: readRecordBoolean(sectionsRaw, "visuals", true),
+        loadInput: readRecordBoolean(sectionsRaw, "loadInput", true),
+        loadResults: readRecordBoolean(sectionsRaw, "loadResults", true),
+        compliance: readRecordBoolean(sectionsRaw, "compliance", true),
+        mphi: readRecordBoolean(sectionsRaw, "mphi", true),
+        appendix: readRecordBoolean(sectionsRaw, "appendix", true),
+      },
+    },
+  };
+}
+
+function clearMomentCurvatureOutputs(): void {
+  state.mcData = null;
+  refs.plotMc.innerHTML = "";
+  refs.plotMcStrain.innerHTML = "";
+  refs.mcDataTable.innerHTML = "";
+  refs.mcStats.innerHTML = "";
+  refs.mcStats.classList.add("hidden");
+  refs.mcHoverInfo.classList.add("hidden");
+  refs.mcHiEpsC.textContent = "—";
+  refs.mcHiEpsS.textContent = "—";
+  refs.mcHiNA.textContent = "—";
+}
+
+function clearAnalysisOutputs(): void {
+  state.results = [];
+  state.surface = [];
+  state.nominalSurface = [];
+  state.compliance = [];
+  state.angleCount = 0;
+  state.depthCount = 0;
+  state.sliceActualAngleDeg = 0;
+  state.sliceShownRows = [];
+  state.lastInput = null;
+  refs.tableBody.innerHTML = "";
+  refs.complianceBody.innerHTML = "";
+  refs.complianceSummary.className = "compliance-summary";
+  refs.complianceSummary.textContent = tx("complianceSummaryInit");
+  refs.rhoDisplay.textContent = "";
+  refs.exportResults.disabled = true;
+  refs.exportSurface.disabled = true;
+  refs.exportReport.disabled = true;
+  refs.exportReportPdf.disabled = true;
+  clearMomentCurvatureOutputs();
+  renderPlot([], []);
+  renderPlot3d([], []);
+  render3dSliceTable([]);
+}
+
+function persistProjectPrefs(): void {
+  localStorage.setItem("pmm-code-mode", refs.codeMode.value);
+  localStorage.setItem("pmm-concrete-model", refs.concreteModel.value);
+  localStorage.setItem("pmm-p-sign", refs.pSign.value);
+  localStorage.setItem("pmm-expected-strength", refs.useExpectedStrength.checked ? "1" : "0");
+  localStorage.setItem("pmm-expected-fck-factor", refs.expectedFckFactor.value);
+  localStorage.setItem("pmm-expected-fyk-factor", refs.expectedFykFactor.value);
+  localStorage.setItem("pmm-p-visual", refs.pVisualScale.value);
+  localStorage.setItem("pmm-surface-opacity", refs.surfaceOpacity.value);
+  localStorage.setItem("pmm-show-nominal-surface", refs.showNominalSurface.checked ? "1" : "0");
+  localStorage.setItem("pmm-controls-open", refs.controlsAccordion.open ? "1" : "0");
+}
+
+function applyProjectFile(project: ProjectFileV1): void {
+  setSelectValue(refs.codeMode, project.input.codeMode, "ts500_tbdy");
+  setSelectValue(refs.concreteModel, project.input.concreteModel, "mander_core_cover");
+  setSelectValue(refs.shape, project.input.shape, "rect");
+  setTextValue(refs.width, project.input.width, "0.40");
+  setTextValue(refs.height, project.input.height, "0.60");
+  setTextValue(refs.diameter, project.input.diameter, "0.60");
+  setTextValue(refs.barsX, project.input.barsX, "4");
+  setTextValue(refs.barsY, project.input.barsY, "4");
+  setTextValue(refs.bars, project.input.bars, "12");
+  setTextValue(refs.cover, project.input.cover, "0.04");
+  setTextValue(refs.tieDia, project.input.tieDia, "10");
+  setTextValue(refs.barDia, project.input.barDia, "16");
+  setTextValue(refs.tieSpacingConf, project.input.tieSpacingConf, "100");
+  setTextValue(refs.tieSpacingMid, project.input.tieSpacingMid, "150");
+  refs.coverToCenter.checked = project.input.coverToCenter;
+  refs.useExpectedStrength.checked = project.input.useExpectedStrength;
+  setTextValue(refs.expectedFckFactor, project.input.expectedFckFactor, "1.30");
+  setTextValue(refs.expectedFykFactor, project.input.expectedFykFactor, "1.20");
+  setTextValue(refs.fck, project.input.fck, "30");
+  setTextValue(refs.fyk, project.input.fyk, "420");
+  setTextValue(refs.gammaC, project.input.gammaC, "1.5");
+  setTextValue(refs.gammaS, project.input.gammaS, "1.15");
+  setTextValue(refs.es, project.input.es, "200000");
+  setTextValue(refs.epsCu, project.input.epsCu, "0.003");
+  setTextValue(refs.mesh, project.input.mesh, "55");
+  setTextValue(refs.nAngle, project.input.nAngle, "72");
+  setTextValue(refs.nDepth, project.input.nDepth, "55");
+  setTextValue(refs.phiP, project.input.phiP, "0.65");
+  setTextValue(refs.phiM, project.input.phiM, "0.90");
+  setTextValue(refs.pCutoffRatio, project.input.pCutoffRatio, "0.80");
+  setTextValue(refs.pVisualScale, project.input.pVisualScale, "0.55");
+  setTextValue(refs.surfaceOpacity, project.input.surfaceOpacity, "0.88");
+  setSelectValue(refs.pSign, project.input.pSign, "compression_positive");
+  setSelectValue(refs.projection, project.input.projection, "p-mx");
+  refs.showNominalSurface.checked = project.input.showNominalSurface;
+  state.showNominalSurface = project.input.showNominalSurface;
+  setTextValue(refs.sliceAngle, project.input.sliceAngle, "0");
+  refs.sliceHideZero.checked = project.input.sliceHideZero;
+  setTextValue(refs.mcP, project.input.mcP, refs.mcP.value);
+  setTextValue(refs.mcAngle, project.input.mcAngle, refs.mcAngle.value);
+  setTextValue(refs.mcSteps, project.input.mcSteps, refs.mcSteps.value);
+  refs.controlsAccordion.open = project.input.controlsOpen;
+
+  state.loadSheet = project.loadSheet.length > 0 ? project.loadSheet.map((row) => ({ ...row })) : [emptyLoadSheetRow("L1")];
+  state.selectedLoadRows.clear();
+  state.loadSelectionAnchor = { row: 0, col: "name" };
+  state.selectedLoadRange = makeLoadCellRange(state.loadSelectionAnchor, state.loadSelectionAnchor);
+  state.activeLoadCell = { row: 0, col: "name" };
+  state.loadMouseSelecting = false;
+
+  setTextValue(refs.reportCompany, project.report.company);
+  setTextValue(refs.reportDocTitle, project.report.documentTitle, "Kolon PMM Teknik Raporu");
+  setTextValue(refs.reportProject, project.report.project);
+  setTextValue(refs.reportClient, project.report.client);
+  setTextValue(refs.reportPreparedBy, project.report.preparedBy);
+  setTextValue(refs.reportCheckedBy, project.report.checkedBy);
+  setTextValue(refs.reportRevision, project.report.revision, "R00");
+  setTextValue(refs.reportDate, project.report.reportDate, formatDateInputValue(new Date()));
+  refs.reportSecCover.checked = project.report.sections.cover;
+  refs.reportSecSummary.checked = project.report.sections.summary;
+  refs.reportSecVisuals.checked = project.report.sections.visuals;
+  refs.reportSecLoadInput.checked = project.report.sections.loadInput;
+  refs.reportSecLoadResults.checked = project.report.sections.loadResults;
+  refs.reportSecCompliance.checked = project.report.sections.compliance;
+  refs.reportSecMphi.checked = project.report.sections.mphi;
+  refs.reportSecAppendix.checked = project.report.sections.appendix;
+  state.reportLogoDataUrl = project.report.logoDataUrl;
+  refs.reportLogo.value = "";
+  refs.reportLogoName.textContent = project.report.logoDataUrl
+    ? (project.report.logoName || (state.lang === "en" ? "Embedded logo" : "Gömülü logo"))
+    : tx("labelReportLogoNoFile");
+
+  persistProjectPrefs();
+  bindShapeVisibility();
+  bindExpectedStrengthVisibility();
+  syncLoadsTextareaFromSheet();
+  renderLoadSheetGrid();
+  renderSurfaceOpacityValue();
+  renderSectionPreview();
+  clearAnalysisOutputs();
+  syncControlsAccordionLayout();
+}
+
+async function readFileText(file: File): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error ?? new Error(tx("statusProjectInvalid")));
+    reader.readAsText(file, "utf-8");
+  });
+}
+
+function saveProjectFile(): void {
+  const project = collectProjectFile();
+  const fileBase = sanitizeProjectFilename(project.report.project || project.report.documentTitle || "pmmstudio-project");
+  downloadText(`${fileBase}.pmm`, JSON.stringify(project, null, 2), "application/json;charset=utf-8");
+  setStatus(`${tx("statusProjectSaved")} (${fileBase}.pmm)`, "info");
+}
+
+async function openProjectFile(): Promise<void> {
+  const file = refs.projectFile.files?.[0];
+  if (!file) return;
+  try {
+    const text = await readFileText(file);
+    const project = parseProjectFile(text);
+    applyProjectFile(project);
+    setStatus(`${tx("statusProjectOpened")} (${file.name})`, "info");
+  } finally {
+    refs.projectFile.value = "";
+  }
+}
+
+function formatIsoDateForDisplay(value: string): string {
+  if (!value) return "-";
+  const dt = new Date(`${value}T00:00:00`);
+  if (!Number.isFinite(dt.getTime())) return value;
+  return dt.toLocaleDateString("tr-TR", { year: "numeric", month: "2-digit", day: "2-digit" });
+}
+
+async function capturePlotlyImage(host: HTMLElement, width: number, height: number): Promise<string> {
+  const currentPlotly = Plotly as any;
+  try {
+    const url = await currentPlotly.toImage(host, { format: "png", width, height });
+    return String(url);
+  } catch {
+    return "";
+  }
+}
+
+async function createMcImageForReport(data: McData, title: string): Promise<string> {
+  const host = document.createElement("div");
+  host.style.position = "fixed";
+  host.style.left = "-12000px";
+  host.style.top = "0";
+  host.style.width = "860px";
+  host.style.height = "420px";
+  host.style.background = "#ffffff";
+  document.body.appendChild(host);
+
+  const curve = {
+    type: "scatter",
+    mode: "lines",
+    x: data.phi,
+    y: data.moment,
+    line: { color: "#0f7f99", width: 2.6 },
+    name: "M-φ",
+  };
+  const key = computeMcKeyPoints(data.phi, data.moment);
+  const peak = {
+    type: "scatter",
+    mode: "markers+text",
+    x: [key.phiPeak],
+    y: [key.mu],
+    marker: { color: "#c54242", size: 9, symbol: "diamond" },
+    text: [`Mu=${fmt(key.mu, 1)} kNm`],
+    textposition: "top right",
+    textfont: { color: "#9c2d2d", size: 11 },
+    name: "Mu",
+  };
+  const bilinear = {
+    type: "scatter",
+    mode: "lines",
+    x: [0, key.phiY, key.phiU],
+    y: [0, key.mu, key.mu],
+    line: { color: "#2f9b5a", width: 1.3, dash: "dash" },
+    name: "Bilineer",
+  };
+
+  const layout = {
+    title: { text: title, x: 0.5, xanchor: "center" as const, font: { size: 15, color: "#17303f" } },
+    paper_bgcolor: "#ffffff",
+    plot_bgcolor: "#ffffff",
+    margin: { l: 74, r: 18, t: 46, b: 64 },
+    xaxis: {
+      title: "φ (1/m)",
+      gridcolor: "rgba(20,60,84,0.14)",
+      zerolinecolor: "rgba(20,60,84,0.22)",
+      color: "#17303f",
+    },
+    yaxis: {
+      title: "M (kNm)",
+      gridcolor: "rgba(20,60,84,0.14)",
+      zerolinecolor: "rgba(20,60,84,0.22)",
+      color: "#17303f",
+    },
+    legend: { orientation: "h" as const, y: -0.2 },
+    font: { color: "#17303f" },
+  };
+
+  const config = { displayModeBar: false, responsive: false };
+  try {
+    const currentPlotly = Plotly as any;
+    await currentPlotly.newPlot(host, [curve, bilinear, peak], layout, config);
+    const url = await currentPlotly.toImage(host, { format: "png", width: 1100, height: 500 });
+    currentPlotly.purge(host);
+    host.remove();
+    return String(url);
+  } catch {
+    host.remove();
+    return "";
+  }
+}
+
+function chooseReportAxialLoad(loads: LoadCase[], signMode: PSignMode): number {
+  if (loads.length === 0) return 0;
+  const factor = pSignFactorForMode(signMode);
+  const compressionValues = loads.map((l) => l.pu * factor).filter((v) => Number.isFinite(v));
+  if (compressionValues.length === 0) return loads[0].pu;
+  const compMax = Math.max(...compressionValues);
+  if (!Number.isFinite(compMax) || compMax <= 0) return loads[0].pu;
+  return compMax * factor;
+}
+
+function reportInputRows(input: AppInput): Array<[string, string]> {
+  return [
+    ["Kod modu", input.codeMode],
+    ["Kesit tipi", input.shape === "rect" ? "Dörtgen" : "Dairesel"],
+    ["Beton modeli", input.concreteModel === "mander_core_cover" ? "Mander core+cover" : "TS500 eşdeğer blok"],
+    ["Boyutlar", input.shape === "rect" ? `b=${fmt(input.widthM, 3)} m, h=${fmt(input.heightM, 3)} m` : `D=${fmt(input.diameterM, 3)} m`],
+    ["Donatı", `Ø${fmt(input.barDiaMm, 0)} mm, etriye Ø${fmt(input.tieDiaMm, 0)} mm`],
+    ["Donatı düzeni", input.shape === "rect" ? `üst/alt=${input.barsX}, sol/sağ=${input.barsY}` : `toplam bar=${input.bars}`],
+    ["Örtü", `${fmt(input.coverM, 3)} m (${input.coverToCenter ? "merkeze kadar" : "net örtü"})`],
+    ["Malzemeler", `fck=${fmt(input.fck, 1)} MPa, fyk=${fmt(input.fyk, 1)} MPa, Es=${fmt(input.es, 0)} MPa`],
+    ["Güvenlik", `gc=${fmt(input.gammaC, 2)}, gs=${fmt(input.gammaS, 2)}, phiP=${fmt(input.phiP, 2)}, phiM=${fmt(input.phiM, 2)}, cut-off=${fmt(input.pCutoffRatio, 2)}`],
+    ["Analiz ağı", `fiber mesh=${input.mesh}, açı=${input.nAngle}, nötr eksen=${input.nDepth}`],
+  ];
+}
+
+function selectedOptionText(select: HTMLSelectElement): string {
+  return select.options[select.selectedIndex]?.textContent?.trim() ?? select.value;
+}
+
+async function buildReportSnapshot(): Promise<ReportSnapshot> {
+  const axis = buildAxisExportData();
+  if (!axis || state.results.length === 0 || !state.lastInput) {
+    throw new Error(tx("statusReportExportEmpty"));
+  }
+  const meta = collectReportMeta();
+  if (!meta.project || !meta.reportDate) {
+    throw new Error(tx("statusReportMetaMissing"));
+  }
+  if (!hasAnyReportSection(meta.sections)) {
+    throw new Error(tx("statusReportSectionNone"));
+  }
+  const wasm = state.wasm;
+  if (!wasm) throw new Error(tx("statusWasmLoading"));
+
+  const input = state.lastInput;
+  const cfgOk = configureWasm(wasm, input);
+  if (cfgOk !== 1) {
+    throw new Error(state.lang === "en" ? "Cannot configure section for report." : "Rapor için kesit konfigürasyonu başarısız.");
+  }
+
+  const pForMc = chooseReportAxialLoad(input.loads, input.pSignMode);
+  const pSignFactor = pSignFactorForMode(input.pSignMode);
+  const mc0Data = computeMcDataAtAngle(wasm, input, pForMc, 0, 140, pSignFactor);
+  const mc90Data = computeMcDataAtAngle(wasm, input, pForMc, 90, 140, pSignFactor);
+  const [mc0Image, mc90Image] = await Promise.all([
+    createMcImageForReport(mc0Data, "Moment-Eğrilik (0° / Mx)"),
+    createMcImageForReport(mc90Data, "Moment-Eğrilik (90° / My)"),
+  ]);
+
+  const pmmCloudDataUrl = refs.plot.toDataURL("image/png");
+  const [pmm3dDataUrl] = await Promise.all([
+    capturePlotlyImage(refs.plot3d, 1100, 780),
+  ]);
+  const sectionPreviewDataUrl = refs.sectionPreview.toDataURL("image/png");
+
+  const failCount = state.compliance.filter((check) => check.status === "fail").length;
+  const passCount = state.compliance.filter((check) => check.status === "pass").length;
+  const infoCount = state.compliance.filter((check) => check.status === "info").length;
+  const dcrValues = state.results.map((row) => row.dcr).filter((value) => Number.isFinite(value));
+  const maxDcr = dcrValues.length > 0 ? Math.max(...dcrValues) : 0;
+  const minDcr = dcrValues.length > 0 ? Math.min(...dcrValues) : 0;
+
+  return {
+    meta,
+    input,
+    loadCases: [...input.loads],
+    results: [...state.results],
+    compliance: [...state.compliance],
+    axis,
+    pmmPointCount: input.nAngle * input.nDepth + 2,
+    maxDcr,
+    minDcr,
+    failCount,
+    passCount,
+    infoCount,
+    sectionPreviewDataUrl,
+    pmmCloudDataUrl,
+    pmm3dDataUrl,
+    mphi0: {
+      angleDeg: 0,
+      axialLoadKn: pForMc,
+      data: mc0Data,
+      keyPoints: computeMcKeyPoints(mc0Data.phi, mc0Data.moment),
+      imageDataUrl: mc0Image,
+    },
+    mphi90: {
+      angleDeg: 90,
+      axialLoadKn: pForMc,
+      data: mc90Data,
+      keyPoints: computeMcKeyPoints(mc90Data.phi, mc90Data.moment),
+      imageDataUrl: mc90Image,
+    },
+  };
+}
+
+function renderMphiSummaryTable(section: MphiReportSection): string {
+  return `
+    <table class="kv-table">
+      <tbody>
+        <tr><th>Açı</th><td>${fmt(section.angleDeg, 0)}°</td></tr>
+        <tr><th>P</th><td>${fmt(section.axialLoadKn, 1)} kN</td></tr>
+        <tr><th>Mu</th><td>${fmt(section.keyPoints.mu, 2)} kNm</td></tr>
+        <tr><th>φu</th><td>${section.keyPoints.phiU.toExponential(4)} 1/m</td></tr>
+        <tr><th>φy (bilineer)</th><td>${section.keyPoints.phiY.toExponential(4)} 1/m</td></tr>
+        <tr><th>μφ</th><td>${fmt(section.keyPoints.ductility, 2)}</td></tr>
+      </tbody>
+    </table>
+  `;
+}
+
+function buildReportHtml(snapshot: ReportSnapshot, printMode: boolean): string {
+  const generatedAt = new Date().toLocaleString("tr-TR");
+  const sections = snapshot.meta.sections;
+  const docTitle = snapshot.meta.documentTitle || "Kolon PMM Teknik Raporu";
+  const safeLogo = snapshot.meta.logoDataUrl;
+  const summaryRows = reportInputRows(snapshot.input)
+    .map(([k, v]) => `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(v)}</td></tr>`)
     .join("");
-  const myRowsHtml = axis.my
-    .map((r, i) => `<tr><td>${i + 1}</td><td>${fmt(r.p, 1)}</td><td>${fmt(r.mPos, 1)}</td><td>${fmt(r.mNeg, 1)}</td></tr>`)
+  const loadRows = snapshot.loadCases
+    .map((row) => `<tr><td>${escapeHtml(row.name)}</td><td>${fmt(row.pu, 2)}</td><td>${fmt(row.mux, 2)}</td><td>${fmt(row.muy, 2)}</td></tr>`)
     .join("");
-  const resultRowsHtml = state.results
-    .map((r) => `<tr><td>${escapeHtml(r.name)}</td><td>${fmt(r.pu)}</td><td>${fmt(r.mux)}</td><td>${fmt(r.muy)}</td><td>${fmt(r.dcr, 4)}</td><td>${r.ok ? tx("resultOk") : tx("resultFail")}</td></tr>`)
+  const resultRows = snapshot.results
+    .map((row) => `<tr>
+      <td>${escapeHtml(row.name)}</td>
+      <td>${fmt(row.pu, 2)}</td>
+      <td>${fmt(row.mux, 2)}</td>
+      <td>${fmt(row.muy, 2)}</td>
+      <td>${fmt(row.pcap, 2)}</td>
+      <td>${fmt(row.mxcap, 2)}</td>
+      <td>${fmt(row.mycap, 2)}</td>
+      <td>${fmt(row.scale, 4)}</td>
+      <td>${fmt(row.dcr, 4)}</td>
+      <td>${row.ok ? "UYGUN" : "UYGUN DEĞİL"}</td>
+    </tr>`)
+    .join("");
+  const complianceRows = snapshot.compliance
+    .map((row) => `<tr>
+      <td>${escapeHtml(row.code)}</td>
+      <td>${escapeHtml(row.clause)}</td>
+      <td>${escapeHtml(row.description)}</td>
+      <td>${escapeHtml(row.value)}</td>
+      <td>${escapeHtml(row.limit)}</td>
+      <td>${row.status === "pass" ? "UYGUN" : row.status === "fail" ? "UYGUN DEĞİL" : "VERİ GEREKLİ"}</td>
+      <td>${escapeHtml(row.note)}</td>
+    </tr>`)
+    .join("");
+  const mxRows = snapshot.axis.mx
+    .map((row, i) => `<tr><td>${i + 1}</td><td>${fmt(row.p, 2)}</td><td>${fmt(row.mPos, 2)}</td><td>${fmt(row.mNeg, 2)}</td></tr>`)
+    .join("");
+  const myRows = snapshot.axis.my
+    .map((row, i) => `<tr><td>${i + 1}</td><td>${fmt(row.p, 2)}</td><td>${fmt(row.mPos, 2)}</td><td>${fmt(row.mNeg, 2)}</td></tr>`)
     .join("");
 
-  const now = new Date().toLocaleString(state.lang === "en" ? "en-US" : "tr-TR");
-  const title = state.lang === "en" ? "Concrete Column PMM Report" : "Betonarme Kolon PMM Raporu";
-  const secMx = state.lang === "en" ? "Mx Axis Capacity (with mirror)" : "Mx Yönü Kapasite (mirror ile)";
-  const secMy = state.lang === "en" ? "My Axis Capacity (with mirror)" : "My Yönü Kapasite (mirror ile)";
-  const secRes = state.lang === "en" ? "Load Results" : "Yük Sonuçları";
-  const lblMeta = state.lang === "en" ? "Generated" : "Oluşturulma";
+  const imageMarkup = (url: string, alt: string, fallback: string): string => (
+    url
+      ? `<img src="${url}" alt="${escapeHtml(alt)}" />`
+      : `<p class="small">${escapeHtml(fallback)}</p>`
+  );
 
-  const html = `
-<!doctype html>
-<html>
+  const sectionBlocks: string[] = [];
+  if (sections.cover) {
+    sectionBlocks.push(`
+    <section class="cover">
+      <div class="cover-head">
+        <div>
+          <p class="kicker">${escapeHtml(snapshot.meta.company || "PMM STUDIO")}</p>
+          <h1 class="title">${escapeHtml(docTitle)}</h1>
+          <p class="subtitle">${escapeHtml(snapshot.meta.project)}</p>
+        </div>
+        ${safeLogo ? `<div class="cover-logo-wrap"><img class="cover-logo" src="${safeLogo}" alt="Kurumsal logo" /></div>` : ""}
+      </div>
+      <div class="cover-meta">
+        <div class="meta-item"><div class="meta-k">Kurum/Firma</div><div class="meta-v">${escapeHtml(snapshot.meta.company || "-")}</div></div>
+        <div class="meta-item"><div class="meta-k">Müşteri</div><div class="meta-v">${escapeHtml(snapshot.meta.client || "-")}</div></div>
+        <div class="meta-item"><div class="meta-k">Hazırlayan</div><div class="meta-v">${escapeHtml(snapshot.meta.preparedBy || "-")}</div></div>
+        <div class="meta-item"><div class="meta-k">Kontrol Eden</div><div class="meta-v">${escapeHtml(snapshot.meta.checkedBy || "-")}</div></div>
+        <div class="meta-item"><div class="meta-k">Revizyon</div><div class="meta-v">${escapeHtml(snapshot.meta.revision || "-")}</div></div>
+        <div class="meta-item"><div class="meta-k">Rapor Tarihi</div><div class="meta-v">${escapeHtml(formatIsoDateForDisplay(snapshot.meta.reportDate))}</div></div>
+        <div class="meta-item"><div class="meta-k">Oluşturulma</div><div class="meta-v">${escapeHtml(generatedAt)}</div></div>
+      </div>
+    </section>`);
+  }
+
+  if (sections.summary) {
+    sectionBlocks.push(`
+    <section class="section">
+      <h2>Analiz Özeti</h2>
+      <div class="summary-grid">
+        <div class="summary-chip"><span class="k">Kod Modu</span><span class="v">${escapeHtml(selectedOptionText(refs.codeMode))}</span></div>
+        <div class="summary-chip"><span class="k">Kesit Tipi</span><span class="v">${escapeHtml(selectedOptionText(refs.shape))}</span></div>
+        <div class="summary-chip"><span class="k">Beton Modeli</span><span class="v">${escapeHtml(selectedOptionText(refs.concreteModel))}</span></div>
+        <div class="summary-chip"><span class="k">PMM Noktası</span><span class="v">${fmt(snapshot.pmmPointCount, 0)}</span></div>
+        <div class="summary-chip"><span class="k">DCR (min / max)</span><span class="v">${fmt(snapshot.minDcr, 4)} / ${fmt(snapshot.maxDcr, 4)}</span></div>
+        <div class="summary-chip"><span class="k">Uyumlu</span><span class="v">${fmt(snapshot.passCount, 0)}</span></div>
+        <div class="summary-chip"><span class="k">Uyumsuz</span><span class="v">${fmt(snapshot.failCount, 0)}</span></div>
+        <div class="summary-chip"><span class="k">Ek Kontrol</span><span class="v">${fmt(snapshot.infoCount, 0)}</span></div>
+      </div>
+      <table class="kv-table"><tbody>${summaryRows}</tbody></table>
+    </section>`);
+  }
+
+  if (sections.visuals) {
+    sectionBlocks.push(`
+    <section class="section">
+      <h2>Kesit Yerleşimi ve PMM Görselleri</h2>
+      <div class="fig-grid">
+        <div class="img-wrap">${imageMarkup(snapshot.sectionPreviewDataUrl, "Kesit yerleşimi", "Kesit görseli üretilemedi.")}</div>
+        <div class="img-wrap">${imageMarkup(snapshot.pmmCloudDataUrl, "PMM nokta bulutu", "PMM 2B görseli üretilemedi.")}</div>
+        <div class="img-wrap">${imageMarkup(snapshot.pmm3dDataUrl, "PMM 3B yüzeyi", "PMM 3B görseli üretilemedi.")}</div>
+      </div>
+    </section>`);
+  }
+
+  if (sections.loadInput) {
+    sectionBlocks.push(`
+    <section class="section">
+      <h2>Yük Girdileri</h2>
+      <table>
+        <thead><tr><th>Yük Adı</th><th>Pu (kN)</th><th>Mux (kNm)</th><th>Muy (kNm)</th></tr></thead>
+        <tbody>${loadRows || `<tr><td colspan="4">-</td></tr>`}</tbody>
+      </table>
+    </section>`);
+  }
+
+  if (sections.loadResults) {
+    sectionBlocks.push(`
+    <section class="section">
+      <h2>Yük Sonuçları</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Yük</th><th>Pu</th><th>Mux</th><th>Muy</th><th>Pcap</th><th>Mxcap</th><th>Mycap</th><th>Scale</th><th>DCR</th><th>Durum</th>
+          </tr>
+        </thead>
+        <tbody>${resultRows || `<tr><td colspan="10">-</td></tr>`}</tbody>
+      </table>
+    </section>`);
+  }
+
+  if (sections.compliance) {
+    sectionBlocks.push(`
+    <section class="section">
+      <h2>Kod Uyumluluk Kontrolü</h2>
+      <table>
+        <thead><tr><th>Kod</th><th>Madde</th><th>Kontrol</th><th>Değer</th><th>Sınır/Kural</th><th>Sonuç</th><th>Not</th></tr></thead>
+        <tbody>${complianceRows || `<tr><td colspan="7">-</td></tr>`}</tbody>
+      </table>
+    </section>`);
+  }
+
+  if (sections.mphi) {
+    sectionBlocks.push(`
+    <section class="section">
+      <h2>Moment-Eğrilik (M-φ) Sonuçları</h2>
+      <p class="section-note">Bu bölüm, rapor için otomatik olarak 0° (Mx) ve 90° (My) yönlerinde tekrar hesaplanmıştır.</p>
+      <div class="fig-grid split-2">
+        <div>
+          <div class="img-wrap">${imageMarkup(snapshot.mphi0.imageDataUrl, "M-φ 0 derece", "M-φ 0° görseli üretilemedi.")}</div>
+          ${renderMphiSummaryTable(snapshot.mphi0)}
+        </div>
+        <div>
+          <div class="img-wrap">${imageMarkup(snapshot.mphi90.imageDataUrl, "M-φ 90 derece", "M-φ 90° görseli üretilemedi.")}</div>
+          ${renderMphiSummaryTable(snapshot.mphi90)}
+        </div>
+      </div>
+    </section>`);
+  }
+
+  if (sections.appendix) {
+    sectionBlocks.push(`
+    <section class="section">
+      <h2>Ekler - Mx/My Dış Zarf Tabloları</h2>
+      <p class="small">Mx açısı: ${fmt(snapshot.axis.mxAngleDeg, 1)}° | My açısı: ${fmt(snapshot.axis.myAngleDeg, 1)}°</p>
+      <div class="split-2">
+        <div>
+          <h3>Mx dış zarfı</h3>
+          <table>
+            <thead><tr><th>No</th><th>P (kN)</th><th>Mx+ (kNm)</th><th>Mx- (kNm)</th></tr></thead>
+            <tbody>${mxRows || `<tr><td colspan="4">-</td></tr>`}</tbody>
+          </table>
+        </div>
+        <div>
+          <h3>My dış zarfı</h3>
+          <table>
+            <thead><tr><th>No</th><th>P (kN)</th><th>My+ (kNm)</th><th>My- (kNm)</th></tr></thead>
+            <tbody>${myRows || `<tr><td colspan="4">-</td></tr>`}</tbody>
+          </table>
+        </div>
+      </div>
+    </section>`);
+  }
+
+  const autoPrintScript = printMode
+    ? `<script>window.addEventListener("load",()=>setTimeout(()=>window.print(),180));</script>`
+    : "";
+
+  return `<!doctype html>
+<html lang="tr">
 <head>
   <meta charset="utf-8" />
+  <title>PMM Studio Teknik Rapor</title>
   <style>
-    body{font-family:Calibri,Arial,sans-serif;color:#111;margin:24px}
-    h1{font-size:22px;margin:0 0 8px}
-    h2{font-size:16px;margin:18px 0 8px}
-    p{margin:2px 0 8px}
-    table{border-collapse:collapse;width:100%;margin:6px 0 12px}
-    th,td{border:1px solid #999;padding:5px 7px;font-size:11px;text-align:right}
-    th:first-child, td:first-child{text-align:left}
-    .muted{color:#555}
+    :root { --ink:#11283a; --muted:#4d6577; --line:#ced8e1; --soft:#edf3f7; --accent:#0f7f99; --fig-max-width:15.8cm; --logo-width:3.9cm; --logo-max-height:1.7cm; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:"Segoe UI", "Arial", sans-serif; color:var(--ink); background:#fff; }
+    .report { width: 100%; max-width: 18.6cm; margin:0 auto; padding:18px 20px 28px; }
+    .cover-head { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; margin-bottom:14px; }
+    .cover-logo-wrap { width:var(--logo-width); max-width:var(--logo-width); flex:0 0 var(--logo-width); display:flex; justify-content:flex-end; align-items:flex-start; text-align:right; }
+    .cover-logo { width:100%; max-height:var(--logo-max-height); height:auto; object-fit:contain; object-position:right top; }
+    .cover { border:1px solid var(--line); border-radius:14px; padding:18px 20px; background:linear-gradient(180deg, #f8fcff, #ffffff); }
+    .kicker { margin:0; font-size:12px; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); }
+    .title { margin:6px 0 6px; font-size:26px; line-height:1.14; font-weight:750; }
+    .subtitle { margin:0 0 12px; color:var(--muted); font-size:13px; }
+    .cover-meta { display:grid; grid-template-columns: repeat(auto-fit, minmax(148px,1fr)); gap:8px; }
+    .meta-item { border:1px solid var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+    .meta-k { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:3px; }
+    .meta-v { font-size:13px; font-weight:600; }
+    .section { margin-top:12px; border:1px solid var(--line); border-radius:12px; padding:11px 12px; background:#fff; }
+    h2 { margin:0 0 8px; font-size:17px; line-height:1.22; }
+    h3 { margin:8px 0 6px; font-size:13px; }
+    .section-note { margin:0 0 6px; color:var(--muted); font-size:11px; }
+    .split-2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    .fig-grid { display:grid; grid-template-columns:1fr; gap:10px; }
+    .img-wrap { border:1px solid var(--line); border-radius:10px; padding:6px; background:var(--soft); text-align:center; width:min(100%, var(--fig-max-width)); margin-inline:auto; }
+    .img-wrap img { width:100%; height:auto; display:block; border-radius:6px; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { border:1px solid var(--line); padding:4px 6px; font-size:10.2px; line-height:1.24; text-align:right; vertical-align:top; }
+    th:first-child, td:first-child { text-align:left; }
+    thead th { background:var(--soft); font-weight:700; }
+    .kv-table th { width:38%; background:var(--soft); }
+    .summary-grid { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:6px; margin-bottom:8px; }
+    .summary-chip { border:1px solid var(--line); border-radius:9px; padding:6px 8px; background:var(--soft); }
+    .summary-chip .k { display:block; font-size:11px; color:var(--muted); margin-bottom:3px; }
+    .summary-chip .v { font-size:12.5px; font-weight:700; color:var(--ink); }
+    .small { font-size:10px; color:var(--muted); }
+    @page { size: A4 portrait; margin: 10mm; }
+    @media print {
+      body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .report { max-width: 18.6cm; padding: 0; }
+      .cover-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
+      .cover-logo-wrap { width:var(--logo-width); max-width:var(--logo-width); flex:0 0 var(--logo-width); margin-top:0; text-align:right; }
+      .cover { padding:14px 16px; }
+      .section { margin-top:10px; padding:9px 10px; }
+      .split-2 { grid-template-columns: 1fr; gap:6px; }
+      .summary-grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap:5px; margin-bottom:6px; }
+      .section { break-inside: auto; page-break-inside: auto; }
+      h2, h3 { break-after: avoid-page; page-break-after: avoid; }
+      .img-wrap { max-width: var(--fig-max-width); break-inside: avoid-page; page-break-inside: avoid; }
+      .img-wrap img { max-width: var(--fig-max-width); }
+      table { break-inside: auto; page-break-inside: auto; }
+      thead { display: table-header-group; }
+      tr { break-inside: avoid-page; page-break-inside: avoid; }
+      th, td { padding: 3.5px 5px; font-size: 9.6px; line-height: 1.18; }
+      .title { font-size: 22px; margin-bottom: 4px; }
+      .subtitle { margin-bottom: 8px; font-size: 12px; }
+      .meta-item { padding: 6px 8px; }
+      .summary-chip { padding: 5px 7px; }
+    }
   </style>
+  ${autoPrintScript}
 </head>
 <body>
-  <h1>${escapeHtml(title)}</h1>
-  <p class="muted">${escapeHtml(lblMeta)}: ${escapeHtml(now)}</p>
-  <p class="muted">Mx angle: ${fmt(axis.mxAngleDeg, 1)}° | My angle: ${fmt(axis.myAngleDeg, 1)}°</p>
-
-  <h2>${escapeHtml(secRes)}</h2>
-  <table>
-    <thead><tr><th>Load</th><th>Pu (kN)</th><th>Mux (kNm)</th><th>Muy (kNm)</th><th>DCR</th><th>Status</th></tr></thead>
-    <tbody>${resultRowsHtml}</tbody>
-  </table>
-
-  <h2>${escapeHtml(secMx)}</h2>
-  <table>
-    <thead><tr><th>No</th><th>P (kN)</th><th>Mx+ (kNm)</th><th>Mx- (kNm)</th></tr></thead>
-    <tbody>${mxRowsHtml}</tbody>
-  </table>
-
-  <h2>${escapeHtml(secMy)}</h2>
-  <table>
-    <thead><tr><th>No</th><th>P (kN)</th><th>My+ (kNm)</th><th>My- (kNm)</th></tr></thead>
-    <tbody>${myRowsHtml}</tbody>
-  </table>
+  <div class="report">
+    ${sectionBlocks.join("\n")}
+  </div>
 </body>
 </html>`;
+}
 
-  downloadDoc("ts500_pmm_report.doc", html);
+async function exportWordReport(): Promise<void> {
+  const snapshot = await buildReportSnapshot();
+  const html = buildReportHtml(snapshot, false);
+  downloadDoc("pmmstudio_rapor.doc", html);
   setStatus(tx("statusReportExported"), "info");
+}
+
+async function exportPdfReport(): Promise<void> {
+  const popup = window.open("about:blank", "_blank");
+  if (!popup) {
+    throw new Error(state.lang === "en" ? "Popup blocker prevented PDF preview." : "Popup engellendi. PDF önizleme açılamadı.");
+  }
+  const writePopupHtml = (html: string): boolean => {
+    try {
+      popup.document.open();
+      popup.document.write(html);
+      popup.document.close();
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const writePopupBlobFallback = (html: string): void => {
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    popup.location.href = url;
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+
+  const loadingHtml = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Rapor hazırlanıyor...</title></head><body style="font-family:Segoe UI,Arial,sans-serif;padding:24px;color:#17323d;">Rapor hazırlanıyor...</body></html>`;
+  if (!writePopupHtml(loadingHtml)) {
+    writePopupBlobFallback(loadingHtml);
+  }
+
+  try {
+    const snapshot = await buildReportSnapshot();
+    const html = buildReportHtml(snapshot, true);
+    if (!writePopupHtml(html)) {
+      writePopupBlobFallback(html);
+    }
+    setStatus(tx("statusReportPdfExported"), "info");
+  } catch (error) {
+    const msg = String(error instanceof Error ? error.message : error);
+    const errorHtml = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Rapor hatası</title></head><body style="font-family:Segoe UI,Arial,sans-serif;padding:24px;color:#8b1e1e;">PDF raporu oluşturulamadı: ${escapeHtml(msg)}</body></html>`;
+    if (!writePopupHtml(errorHtml)) {
+      writePopupBlobFallback(errorHtml);
+    }
+    throw error;
+  }
 }
 
 async function loadWasm(): Promise<WasmExports> {
@@ -3721,6 +6047,7 @@ function toggleMcFullscreen(): void {
   }
   updateMcFullscreenButtonLabel();
   resizeMcPlotsDeferred(90);
+  resizeMcPlotsDeferred(260);
 }
 
 function closeMcFullscreen(): void {
@@ -3730,6 +6057,7 @@ function closeMcFullscreen(): void {
   refs.mcCloseBtn.classList.remove("mc-close-visible");
   updateMcFullscreenButtonLabel();
   resizeMcPlotsDeferred(90);
+  resizeMcPlotsDeferred(260);
 }
 
 function mcClipboardText(data: McData): string {
@@ -3842,10 +6170,14 @@ function renderStrainDiagram(data: McData, idx: number): void {
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: sceneBg,
     height: mcPlotHeightPx(),
-    margin: { l: 60, r: 20, t: 66, b: 56 },
+    margin: { l: 60, r: 20, t: 52, b: 92 },
     title: {
       text: state.lang === "en" ? "Strain Diagram" : "Birim Uzama Diyagramı",
       font: { color: textColor, size: 13 },
+      x: 0.5,
+      xanchor: "center" as const,
+      y: 0.98,
+      yanchor: "top" as const,
     },
     xaxis: {
       title: { text: xLabel, font: { color: textColor, size: 11 } },
@@ -3866,14 +6198,20 @@ function renderStrainDiagram(data: McData, idx: number): void {
       orientation: "h" as const,
       x: 0.5,
       xanchor: "center" as const,
-      y: 1.08,
-      yanchor: "bottom" as const,
+      y: -0.22,
+      yanchor: "top" as const,
     },
     font: { color: textColor },
     showlegend: true,
   };
 
-  const config = { responsive: true, displaylogo: false, scrollZoom: false, staticPlot: false };
+  const config = {
+    responsive: true,
+    displaylogo: false,
+    displayModeBar: false,
+    scrollZoom: false,
+    staticPlot: false,
+  };
 
   try {
     (Plotly as any).react(host, [zeroTrace, strainTrace, naTrace], layout, config);
@@ -3881,3 +6219,13 @@ function renderStrainDiagram(data: McData, idx: number): void {
     host.textContent = String(e);
   }
 }
+
+
+
+
+
+
+
+
+
+
