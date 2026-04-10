@@ -20,6 +20,10 @@ interface WasmExports {
     barDia: number,
     barsX: number,
     barsY: number,
+    useDoubleLayer: number,
+    barsX2: number,
+    barsY2: number,
+    layerSpacing: number,
     coverToCenter: number,
     fck: number,
     fyk: number,
@@ -37,6 +41,9 @@ interface WasmExports {
     tieDia: number,
     barDia: number,
     bars: number,
+    useDoubleLayer: number,
+    bars2: number,
+    layerSpacing: number,
     coverToCenter: number,
     fck: number,
     fyk: number,
@@ -97,6 +104,11 @@ interface SectionDef {
   barsX: string;
   barsY: string;
   bars: string;
+  useDoubleLayer: boolean;
+  barsX2: string;
+  barsY2: string;
+  bars2: string;
+  layerSpacing: string;
   cover: string;
   tieDia: string;
   barDia: string;
@@ -154,6 +166,8 @@ interface ReportMeta {
 interface ProjectInputState {
   codeMode: CodeMode;
   concreteModel: ConcreteModel;
+  materialPreset: string;
+  steelPreset: string;
   shape: Shape;
   width: string;
   height: string;
@@ -161,6 +175,11 @@ interface ProjectInputState {
   barsX: string;
   barsY: string;
   bars: string;
+  useDoubleLayer: boolean;
+  barsX2: string;
+  barsY2: string;
+  bars2: string;
+  layerSpacing: string;
   cover: string;
   tieDia: string;
   barDia: string;
@@ -285,6 +304,11 @@ interface AppInput {
   barsX: number;
   barsY: number;
   bars: number;
+  useDoubleLayer: boolean;
+  barsX2: number;
+  barsY2: number;
+  bars2: number;
+  layerSpacingMm: number;
   coverM: number;
   tieDiaMm: number;
   barDiaMm: number;
@@ -306,6 +330,179 @@ interface AppInput {
   pVisualScale: number;
   pSignMode: PSignMode;
   loads: LoadCase[];
+}
+
+interface MaterialPresetValues {
+  fck: number;
+  fyk: number;
+  gammaC: number;
+  gammaS: number;
+  es: number;
+  epsCu: number;
+}
+
+interface SteelPresetValues {
+  fyk: number;
+}
+
+const MATERIAL_PRESETS = {
+  "ts500-c25-30": {
+    fck: 25,
+    fyk: 420,
+    gammaC: 1.5,
+    gammaS: 1.15,
+    es: 200000,
+    epsCu: 0.003,
+  },
+  "ts500-c30-35": {
+    fck: 30,
+    fyk: 420,
+    gammaC: 1.5,
+    gammaS: 1.15,
+    es: 200000,
+    epsCu: 0.003,
+  },
+  "ts500-c35-40": {
+    fck: 35,
+    fyk: 420,
+    gammaC: 1.5,
+    gammaS: 1.15,
+    es: 200000,
+    epsCu: 0.003,
+  },
+  "ts500-c40-50": {
+    fck: 40,
+    fyk: 420,
+    gammaC: 1.5,
+    gammaS: 1.15,
+    es: 200000,
+    epsCu: 0.003,
+  },
+  "ts500-c45-55": {
+    fck: 45,
+    fyk: 420,
+    gammaC: 1.5,
+    gammaS: 1.15,
+    es: 200000,
+    epsCu: 0.003,
+  },
+  "eu-c25-30": {
+    fck: 25,
+    fyk: 500,
+    gammaC: 1.5,
+    gammaS: 1.15,
+    es: 200000,
+    epsCu: 0.003,
+  },
+  "eu-c30-37": {
+    fck: 30,
+    fyk: 500,
+    gammaC: 1.5,
+    gammaS: 1.15,
+    es: 200000,
+    epsCu: 0.003,
+  },
+  "eu-c35-45": {
+    fck: 35,
+    fyk: 500,
+    gammaC: 1.5,
+    gammaS: 1.15,
+    es: 200000,
+    epsCu: 0.003,
+  },
+  "eu-c40-50": {
+    fck: 40,
+    fyk: 500,
+    gammaC: 1.5,
+    gammaS: 1.15,
+    es: 200000,
+    epsCu: 0.003,
+  },
+  "eu-c45-55": {
+    fck: 45,
+    fyk: 500,
+    gammaC: 1.5,
+    gammaS: 1.15,
+    es: 200000,
+    epsCu: 0.003,
+  },
+  "eu-c50-60": {
+    fck: 50,
+    fyk: 500,
+    gammaC: 1.5,
+    gammaS: 1.15,
+    es: 200000,
+    epsCu: 0.003,
+  },
+  "aci-fc-30": {
+    fck: 30,
+    fyk: 420,
+    gammaC: 1,
+    gammaS: 1,
+    es: 200000,
+    epsCu: 0.003,
+  },
+  "aci-fc-35": {
+    fck: 35,
+    fyk: 420,
+    gammaC: 1,
+    gammaS: 1,
+    es: 200000,
+    epsCu: 0.003,
+  },
+  "aci-fc-40": {
+    fck: 40,
+    fyk: 420,
+    gammaC: 1,
+    gammaS: 1,
+    es: 200000,
+    epsCu: 0.003,
+  },
+  "aci-fc-45": {
+    fck: 45,
+    fyk: 420,
+    gammaC: 1,
+    gammaS: 1,
+    es: 200000,
+    epsCu: 0.003,
+  },
+} as const;
+
+const STEEL_PRESETS = {
+  "steel-ts500-s220": { fyk: 220 },
+  "steel-ts500-s275": { fyk: 275 },
+  "steel-ts500-s320": { fyk: 320 },
+  "steel-ts500-s420": { fyk: 420 },
+  "steel-ts500-s500": { fyk: 500 },
+  "steel-eu-b400": { fyk: 400 },
+  "steel-eu-b500a": { fyk: 500 },
+  "steel-eu-b500b": { fyk: 500 },
+  "steel-eu-b550b": { fyk: 550 },
+  "steel-eu-b600b": { fyk: 600 },
+  "steel-aci-gr40": { fyk: 276 },
+  "steel-aci-gr60": { fyk: 414 },
+  "steel-aci-gr75": { fyk: 517 },
+} as const;
+
+type MaterialPresetId = keyof typeof MATERIAL_PRESETS;
+type SteelPresetId = keyof typeof STEEL_PRESETS;
+
+function getMaterialPreset(id: string): MaterialPresetValues | null {
+  if (!Object.prototype.hasOwnProperty.call(MATERIAL_PRESETS, id)) return null;
+  return MATERIAL_PRESETS[id as MaterialPresetId];
+}
+
+function getSteelPreset(id: string): SteelPresetValues | null {
+  if (!Object.prototype.hasOwnProperty.call(STEEL_PRESETS, id)) return null;
+  return STEEL_PRESETS[id as SteelPresetId];
+}
+
+function isMaterialPresetId(value: string): value is MaterialPresetId | "custom" {
+  return value === "custom" || Object.prototype.hasOwnProperty.call(MATERIAL_PRESETS, value);
+}
+
+function isSteelPresetId(value: string): value is SteelPresetId | "custom" {
+  return value === "custom" || Object.prototype.hasOwnProperty.call(STEEL_PRESETS, value);
 }
 
 const app = document.querySelector<HTMLDivElement>("#app");
@@ -443,6 +640,26 @@ app.innerHTML = `
                   <span data-i18n="labelBars">Dairesel toplam bar</span>
                   <input id="bars" type="number" value="12" min="3" step="1" />
                 </label>
+                <label id="field-double-layer" class="checkbox-inline">
+                  <input id="double-layer" type="checkbox" />
+                  <span data-i18n="labelDoubleLayer">Çift sıra donatı kullan</span>
+                </label>
+                <label id="field-bars-x2" class="hidden">
+                  <span data-i18n="labelBarsX2">2. sıra üst/alt bar adedi</span>
+                  <input id="bars-x2" type="number" value="2" min="2" step="1" />
+                </label>
+                <label id="field-bars-y2" class="hidden">
+                  <span data-i18n="labelBarsY2">2. sıra sol/sağ bar adedi</span>
+                  <input id="bars-y2" type="number" value="2" min="2" step="1" />
+                </label>
+                <label id="field-bars-2" class="hidden">
+                  <span data-i18n="labelBars2">2. halka bar adedi</span>
+                  <input id="bars-2" type="number" value="6" min="3" step="1" />
+                </label>
+                <label id="field-layer-spacing" class="hidden">
+                  <span data-i18n="labelLayerSpacing">Sıra eksenleri arası a_row (mm)</span>
+                  <input id="layer-spacing" type="number" value="60" min="20" step="5" />
+                </label>
 
                 <label>
                   <span data-i18n="labelCover">Cover (m)</span>
@@ -472,17 +689,69 @@ app.innerHTML = `
                 <span data-i18n="labelCoverToCenter">Cover değeri donatı merkezine kadar verildi</span>
               </label>
             </div>
-          </section>
+            </section>
 
-          <section class="input-group input-group--analysis">
-            <div class="input-group-head">
-              <h3 data-i18n="headingGroupAnalysis">Malzeme ve Analiz</h3>
-            </div>
-            <div class="grid controls-grid controls-grid--analysis">
-              <label>
-                <span data-i18n="labelFck">fck (MPa)</span>
-                <input id="fck" type="number" value="30" min="10" step="1" />
-              </label>
+            <section class="input-group input-group--analysis">
+              <div class="input-group-head">
+                <h3 data-i18n="headingGroupAnalysis">Malzeme ve Analiz</h3>
+              </div>
+              <div class="grid controls-grid controls-grid--analysis">
+                <label>
+                  <span data-i18n="labelMaterialPreset">Hazır beton sınıfı</span>
+                  <select id="material-preset">
+                    <option value="custom" data-i18n="optMaterialPresetCustom">Özel</option>
+                    <optgroup label="TS500 / TBDY" data-preset-family="ts500">
+                      <option value="ts500-c25-30" data-i18n="optMaterialPresetTs500C25_30">C25/30</option>
+                      <option value="ts500-c30-35" data-i18n="optMaterialPresetTs500C30_35">C30/35</option>
+                      <option value="ts500-c35-40" data-i18n="optMaterialPresetTs500C35_40">C35/40</option>
+                      <option value="ts500-c40-50" data-i18n="optMaterialPresetTs500C40_50">C40/50</option>
+                      <option value="ts500-c45-55" data-i18n="optMaterialPresetTs500C45_55">C45/55</option>
+                    </optgroup>
+                    <optgroup label="Eurocode" data-preset-family="eu">
+                      <option value="eu-c25-30" data-i18n="optMaterialPresetEuC25_30">C25/30</option>
+                      <option value="eu-c30-37" data-i18n="optMaterialPresetEuC30_37">C30/37</option>
+                      <option value="eu-c35-45" data-i18n="optMaterialPresetEuC35_45">C35/45</option>
+                      <option value="eu-c40-50" data-i18n="optMaterialPresetEuC40_50">C40/50</option>
+                      <option value="eu-c45-55" data-i18n="optMaterialPresetEuC45_55">C45/55</option>
+                      <option value="eu-c50-60" data-i18n="optMaterialPresetEuC50_60">C50/60</option>
+                    </optgroup>
+                    <optgroup label="ACI 318" data-preset-family="aci">
+                      <option value="aci-fc-30" data-i18n="optMaterialPresetAciF30">f'c=30 MPa</option>
+                      <option value="aci-fc-35" data-i18n="optMaterialPresetAciF35">f'c=35 MPa</option>
+                      <option value="aci-fc-40" data-i18n="optMaterialPresetAciF40">f'c=40 MPa</option>
+                      <option value="aci-fc-45" data-i18n="optMaterialPresetAciF45">f'c=45 MPa</option>
+                    </optgroup>
+                  </select>
+                </label>
+                  <label>
+                  <span data-i18n="labelSteelPreset">Hazır çelik sınıfı</span>
+                  <select id="steel-preset">
+                    <option value="custom" data-i18n="optSteelPresetCustom">Özel</option>
+                    <optgroup label="TS500 / TBDY" data-preset-family="ts500">
+                      <option value="steel-ts500-s220" data-i18n="optSteelPresetTs500S220">S220</option>
+                      <option value="steel-ts500-s275" data-i18n="optSteelPresetTs500S275">S275</option>
+                      <option value="steel-ts500-s320" data-i18n="optSteelPresetTs500S320">S320</option>
+                      <option value="steel-ts500-s420" data-i18n="optSteelPresetTs500S420">S420</option>
+                      <option value="steel-ts500-s500" data-i18n="optSteelPresetTs500S500">S500</option>
+                    </optgroup>
+                    <optgroup label="Eurocode" data-preset-family="eu">
+                      <option value="steel-eu-b400" data-i18n="optSteelPresetEuB400">B400</option>
+                      <option value="steel-eu-b500a" data-i18n="optSteelPresetEuB500A">B500A</option>
+                      <option value="steel-eu-b500b" data-i18n="optSteelPresetEuB500B">B500B</option>
+                      <option value="steel-eu-b550b" data-i18n="optSteelPresetEuB550B">B550B</option>
+                      <option value="steel-eu-b600b" data-i18n="optSteelPresetEuB600B">B600B</option>
+                    </optgroup>
+                    <optgroup label="ACI 318" data-preset-family="aci">
+                      <option value="steel-aci-gr40" data-i18n="optSteelPresetAciGr40">ASTM A615 Gr.40</option>
+                      <option value="steel-aci-gr60" data-i18n="optSteelPresetAciGr60">ASTM A615 Gr.60</option>
+                      <option value="steel-aci-gr75" data-i18n="optSteelPresetAciGr75">ASTM A615 Gr.75</option>
+                    </optgroup>
+                  </select>
+                </label>
+                <label>
+                  <span data-i18n="labelFck">fck (MPa)</span>
+                  <input id="fck" type="number" value="30" min="10" step="1" />
+                </label>
               <label>
                 <span data-i18n="labelFyk">fyk (MPa)</span>
                 <input id="fyk" type="number" value="420" min="220" step="1" />
@@ -884,6 +1153,8 @@ const refs = {
   themeToggle: must<HTMLButtonElement>("theme-toggle"),
   codeMode: must<HTMLSelectElement>("code-mode"),
   concreteModel: must<HTMLSelectElement>("concrete-model"),
+  materialPreset: must<HTMLSelectElement>("material-preset"),
+  steelPreset: must<HTMLSelectElement>("steel-preset"),
   shape: must<HTMLSelectElement>("shape"),
   width: must<HTMLInputElement>("width"),
   height: must<HTMLInputElement>("height"),
@@ -891,6 +1162,11 @@ const refs = {
   barsX: must<HTMLInputElement>("bars-x"),
   barsY: must<HTMLInputElement>("bars-y"),
   bars: must<HTMLInputElement>("bars"),
+  doubleLayer: must<HTMLInputElement>("double-layer"),
+  barsX2: must<HTMLInputElement>("bars-x2"),
+  barsY2: must<HTMLInputElement>("bars-y2"),
+  bars2: must<HTMLInputElement>("bars-2"),
+  layerSpacing: must<HTMLInputElement>("layer-spacing"),
   cover: must<HTMLInputElement>("cover"),
   tieDia: must<HTMLInputElement>("tie-dia"),
   barDia: must<HTMLInputElement>("bar-dia"),
@@ -971,9 +1247,14 @@ const refs = {
   fieldWidth: must<HTMLElement>("field-width"),
   fieldHeight: must<HTMLElement>("field-height"),
   fieldDiameter: must<HTMLElement>("field-diameter"),
+  fieldDoubleLayer: must<HTMLElement>("field-double-layer"),
   fieldBarsX: must<HTMLElement>("field-bars-x"),
   fieldBarsY: must<HTMLElement>("field-bars-y"),
   fieldBars: must<HTMLElement>("field-bars"),
+  fieldBarsX2: must<HTMLElement>("field-bars-x2"),
+  fieldBarsY2: must<HTMLElement>("field-bars-y2"),
+  fieldBars2: must<HTMLElement>("field-bars-2"),
+  fieldLayerSpacing: must<HTMLElement>("field-layer-spacing"),
   fieldExpectedFckFactor: must<HTMLElement>("field-expected-fck-factor"),
   fieldExpectedFykFactor: must<HTMLElement>("field-expected-fyk-factor"),
   mcP: must<HTMLInputElement>("mc-p"),
@@ -1091,6 +1372,11 @@ const I18N = {
     labelBarsX: "Üst/alt bar adedi",
     labelBarsY: "Sol/sağ bar adedi",
     labelBars: "Dairesel toplam bar",
+    labelDoubleLayer: "Çift sıra donatı kullan",
+    labelBarsX2: "2. sıra üst/alt bar adedi",
+    labelBarsY2: "2. sıra sol/sağ bar adedi",
+    labelBars2: "2. halka bar adedi",
+    labelLayerSpacing: "Sıra eksenleri arası a_row (mm)",
     labelCover: "Cover (m)",
     labelTieDia: "Etriye çapı (mm)",
     labelBarDia: "Boyuna donatı çapı (mm)",
@@ -1098,6 +1384,38 @@ const I18N = {
     labelTieSpacingMid: "Orta bölge etriye aralığı s_mid (mm)",
     labelFck: "fck (MPa)",
     labelFyk: "fyk (MPa)",
+    labelMaterialPreset: "Hazır beton sınıfı",
+    labelSteelPreset: "Hazır çelik sınıfı",
+    optMaterialPresetCustom: "Özel",
+    optMaterialPresetTs500C25_30: "C25/30",
+    optMaterialPresetTs500C30_35: "C30/35",
+    optMaterialPresetTs500C35_40: "C35/40",
+    optMaterialPresetTs500C40_50: "C40/50",
+    optMaterialPresetTs500C45_55: "C45/55",
+    optMaterialPresetEuC25_30: "C25/30",
+    optMaterialPresetEuC30_37: "C30/37",
+    optMaterialPresetEuC35_45: "C35/45",
+    optMaterialPresetEuC40_50: "C40/50",
+    optMaterialPresetEuC45_55: "C45/55",
+    optMaterialPresetEuC50_60: "C50/60",
+    optMaterialPresetAciF30: "f'c=30 MPa",
+    optMaterialPresetAciF35: "f'c=35 MPa",
+    optMaterialPresetAciF40: "f'c=40 MPa",
+    optMaterialPresetAciF45: "f'c=45 MPa",
+    optSteelPresetCustom: "Özel",
+    optSteelPresetTs500S220: "S220",
+    optSteelPresetTs500S275: "S275",
+    optSteelPresetTs500S320: "S320",
+    optSteelPresetTs500S420: "S420",
+    optSteelPresetTs500S500: "S500",
+    optSteelPresetEuB400: "B400",
+    optSteelPresetEuB500A: "B500A",
+    optSteelPresetEuB500B: "B500B",
+    optSteelPresetEuB550B: "B550B",
+    optSteelPresetEuB600B: "B600B",
+    optSteelPresetAciGr40: "ASTM A615 Gr.40",
+    optSteelPresetAciGr60: "ASTM A615 Gr.60",
+    optSteelPresetAciGr75: "ASTM A615 Gr.75",
     labelGammaC: "gc",
     labelGammaS: "gs",
     labelEs: "Es (MPa)",
@@ -1299,6 +1617,11 @@ const I18N = {
     labelBarsX: "Top/bottom bar count",
     labelBarsY: "Left/right bar count",
     labelBars: "Total circular bars",
+    labelDoubleLayer: "Use double-layer bars",
+    labelBarsX2: "2nd layer top/bottom bars",
+    labelBarsY2: "2nd layer left/right bars",
+    labelBars2: "2nd ring bar count",
+    labelLayerSpacing: "Layer center spacing a_row (mm)",
     labelCover: "Cover (m)",
     labelTieDia: "Tie diameter (mm)",
     labelBarDia: "Longitudinal bar diameter (mm)",
@@ -1306,6 +1629,38 @@ const I18N = {
     labelTieSpacingMid: "Middle-zone tie spacing s_mid (mm)",
     labelFck: "fck (MPa)",
     labelFyk: "fyk (MPa)",
+    labelMaterialPreset: "Concrete preset",
+    labelSteelPreset: "Steel preset",
+    optMaterialPresetCustom: "Custom",
+    optMaterialPresetTs500C25_30: "C25/30",
+    optMaterialPresetTs500C30_35: "C30/35",
+    optMaterialPresetTs500C35_40: "C35/40",
+    optMaterialPresetTs500C40_50: "C40/50",
+    optMaterialPresetTs500C45_55: "C45/55",
+    optMaterialPresetEuC25_30: "C25/30",
+    optMaterialPresetEuC30_37: "C30/37",
+    optMaterialPresetEuC35_45: "C35/45",
+    optMaterialPresetEuC40_50: "C40/50",
+    optMaterialPresetEuC45_55: "C45/55",
+    optMaterialPresetEuC50_60: "C50/60",
+    optMaterialPresetAciF30: "f'c=30 MPa",
+    optMaterialPresetAciF35: "f'c=35 MPa",
+    optMaterialPresetAciF40: "f'c=40 MPa",
+    optMaterialPresetAciF45: "f'c=45 MPa",
+    optSteelPresetCustom: "Custom",
+    optSteelPresetTs500S220: "S220",
+    optSteelPresetTs500S275: "S275",
+    optSteelPresetTs500S320: "S320",
+    optSteelPresetTs500S420: "S420",
+    optSteelPresetTs500S500: "S500",
+    optSteelPresetEuB400: "B400",
+    optSteelPresetEuB500A: "B500A",
+    optSteelPresetEuB500B: "B500B",
+    optSteelPresetEuB550B: "B550B",
+    optSteelPresetEuB600B: "B600B",
+    optSteelPresetAciGr40: "ASTM A615 Gr.40",
+    optSteelPresetAciGr60: "ASTM A615 Gr.60",
+    optSteelPresetAciGr75: "ASTM A615 Gr.75",
     labelGammaC: "gc",
     labelGammaS: "gs",
     labelEs: "Es (MPa)",
@@ -1682,6 +2037,10 @@ async function init(): Promise<void> {
   if (savedConcreteModel === "ts500_block" || savedConcreteModel === "mander_core_cover") {
     refs.concreteModel.value = savedConcreteModel;
   }
+  const savedMaterialPreset = localStorage.getItem("pmm-material-preset");
+  setSelectValue(refs.materialPreset, savedMaterialPreset ?? "custom", "custom");
+  const savedSteelPreset = localStorage.getItem("pmm-steel-preset");
+  setSelectValue(refs.steelPreset, savedSteelPreset ?? "custom", "custom");
   const savedCodeMode = localStorage.getItem("pmm-code-mode");
   if (savedCodeMode === "ts500" || savedCodeMode === "ts500_tbdy" || savedCodeMode === "aci318_19") {
     refs.codeMode.value = savedCodeMode;
@@ -1725,15 +2084,41 @@ async function init(): Promise<void> {
   bindShapeVisibility();
   bindExpectedStrengthVisibility();
   applyCodeModePreset(false);
+  applyMaterialPresetFromSelection(refs.materialPreset.value);
+  applySteelPresetFromSelection(refs.steelPreset.value);
   bindSectionPreviewListeners();
   renderSectionPreview();
   refs.shape.addEventListener("change", bindShapeVisibility);
+  refs.doubleLayer.addEventListener("change", bindShapeVisibility);
   refs.sectionAddBtn.addEventListener("click", addSection);
   refs.codeMode.addEventListener("change", () => {
     localStorage.setItem("pmm-code-mode", refs.codeMode.value);
     applyCodeModePreset(true);
     bindExpectedStrengthVisibility();
   });
+  refs.materialPreset.addEventListener("change", () => {
+    if (refs.materialPreset.value === "custom") {
+      markMaterialPresetCustom();
+      return;
+    }
+    applyMaterialPresetFromSelection(refs.materialPreset.value);
+  });
+  refs.steelPreset.addEventListener("change", () => {
+    if (refs.steelPreset.value === "custom") {
+      markSteelPresetCustom();
+      return;
+    }
+    applySteelPresetFromSelection(refs.steelPreset.value);
+  });
+  for (const el of [refs.fck, refs.gammaC, refs.gammaS, refs.es, refs.epsCu]) {
+    el.addEventListener("input", markMaterialPresetCustom);
+    el.addEventListener("change", markMaterialPresetCustom);
+  }
+  const onFykInputCustom = (): void => {
+    markSteelPresetCustom();
+  };
+  refs.fyk.addEventListener("input", onFykInputCustom);
+  refs.fyk.addEventListener("change", onFykInputCustom);
   refs.controlsAccordion.addEventListener("toggle", syncControlsAccordionLayout);
   refs.langToggle.addEventListener("click", () => {
     state.lang = state.lang === "tr" ? "en" : "tr";
@@ -1859,10 +2244,28 @@ function defaultSection(id: number, name: string): SectionDef {
     shape: "rect",
     width: "0.40", height: "0.60", diameter: "0.60",
     barsX: "4", barsY: "4", bars: "12",
+    useDoubleLayer: false,
+    barsX2: "2", barsY2: "2", bars2: "6", layerSpacing: "60",
     cover: "0.04", tieDia: "10", barDia: "16",
     tieSpacingConf: "100", tieSpacingMid: "150",
     coverToCenter: false,
   };
+}
+
+function countRectPerimeterBars(barsX: number, barsY: number): number {
+  return Math.max(0, 2 * barsX + 2 * Math.max(0, barsY - 2));
+}
+
+function countSectionBars(sec: Pick<SectionDef, "shape" | "barsX" | "barsY" | "bars" | "useDoubleLayer" | "barsX2" | "barsY2" | "bars2">): number {
+  if (sec.shape === "rect") {
+    let total = countRectPerimeterBars(ni(sec.barsX), ni(sec.barsY));
+    if (sec.useDoubleLayer) total += countRectPerimeterBars(ni(sec.barsX2), ni(sec.barsY2));
+    return total;
+  }
+
+  let total = Math.max(0, ni(sec.bars));
+  if (sec.useDoubleLayer) total += Math.max(0, ni(sec.bars2));
+  return total;
 }
 
 function sectionSummaryText(sec: SectionDef): string {
@@ -1876,10 +2279,9 @@ function sectionSummaryText(sec: SectionDef): string {
 }
 
 function sectionRebarSummary(sec: SectionDef): string {
-  const nBars = sec.shape === "rect"
-    ? 2 * parseInt(sec.barsX) + 2 * Math.max(0, parseInt(sec.barsY) - 2)
-    : parseInt(sec.bars);
-  return `${isNaN(nBars) ? "?" : nBars}\u03C6${sec.barDia}`;
+  const nBars = countSectionBars(sec);
+  const layerTag = sec.useDoubleLayer ? (state.lang === "en" ? " / 2 layers" : " / 2 sıra") : "";
+  return `${isNaN(nBars) ? "?" : nBars}\u03C6${sec.barDia}${layerTag}`;
 }
 
 function syncSectionFormToState(): void {
@@ -1892,6 +2294,11 @@ function syncSectionFormToState(): void {
   sec.barsX = refs.barsX.value;
   sec.barsY = refs.barsY.value;
   sec.bars = refs.bars.value;
+  sec.useDoubleLayer = refs.doubleLayer.checked;
+  sec.barsX2 = refs.barsX2.value;
+  sec.barsY2 = refs.barsY2.value;
+  sec.bars2 = refs.bars2.value;
+  sec.layerSpacing = refs.layerSpacing.value;
   sec.cover = refs.cover.value;
   sec.tieDia = refs.tieDia.value;
   sec.barDia = refs.barDia.value;
@@ -1910,6 +2317,11 @@ function loadSectionToForm(idx: number): void {
   refs.barsX.value = sec.barsX;
   refs.barsY.value = sec.barsY;
   refs.bars.value = sec.bars;
+  refs.doubleLayer.checked = sec.useDoubleLayer;
+  refs.barsX2.value = sec.barsX2;
+  refs.barsY2.value = sec.barsY2;
+  refs.bars2.value = sec.bars2;
+  refs.layerSpacing.value = sec.layerSpacing;
   refs.cover.value = sec.cover;
   refs.tieDia.value = sec.tieDia;
   refs.barDia.value = sec.barDia;
@@ -2017,12 +2429,18 @@ function updateActiveSectionStripSummary(): void {
 function bindShapeVisibility(): void {
   const shape = refs.shape.value as Shape;
   const rect = shape === "rect";
+  const doubleLayer = refs.doubleLayer.checked;
   refs.fieldWidth.classList.toggle("hidden", !rect);
   refs.fieldHeight.classList.toggle("hidden", !rect);
+  refs.fieldDoubleLayer.classList.remove("hidden");
   refs.fieldBarsX.classList.toggle("hidden", !rect);
   refs.fieldBarsY.classList.toggle("hidden", !rect);
   refs.fieldDiameter.classList.toggle("hidden", rect);
   refs.fieldBars.classList.toggle("hidden", rect);
+  refs.fieldBarsX2.classList.toggle("hidden", !rect || !doubleLayer);
+  refs.fieldBarsY2.classList.toggle("hidden", !rect || !doubleLayer);
+  refs.fieldBars2.classList.toggle("hidden", rect || !doubleLayer);
+  refs.fieldLayerSpacing.classList.toggle("hidden", !doubleLayer);
   renderSectionPreview();
 }
 
@@ -2035,8 +2453,48 @@ function bindExpectedStrengthVisibility(): void {
   refs.fieldExpectedFykFactor.classList.toggle("hidden", !showFactors);
 }
 
+function allowedPresetFamiliesForCodeMode(codeMode: CodeMode): string[] {
+  return codeMode === "aci318_19" ? ["aci"] : ["ts500", "eu"];
+}
+
+function syncPresetGroupVisibility(select: HTMLSelectElement, allowedFamilies: string[]): void {
+  const groups = Array.from(select.querySelectorAll("optgroup"));
+  for (const group of groups) {
+    const family = group.dataset.presetFamily ?? "";
+    const visible = family === "" || allowedFamilies.includes(family);
+    group.hidden = !visible;
+    group.disabled = !visible;
+  }
+}
+
+function isPresetValueAllowed(select: HTMLSelectElement, value: string, allowedFamilies: string[]): boolean {
+  if (value === "custom") return true;
+  const option = Array.from(select.options).find((item) => item.value === value);
+  if (!option || option.disabled || option.hidden) return false;
+  const parent = option.parentElement;
+  if (parent instanceof HTMLOptGroupElement) {
+    const family = parent.dataset.presetFamily ?? "";
+    return family === "" || allowedFamilies.includes(family);
+  }
+  return true;
+}
+
+function syncPresetVisibilityForCodeMode(): void {
+  const allowedFamilies = allowedPresetFamiliesForCodeMode(refs.codeMode.value as CodeMode);
+  syncPresetGroupVisibility(refs.materialPreset, allowedFamilies);
+  syncPresetGroupVisibility(refs.steelPreset, allowedFamilies);
+
+  if (!isPresetValueAllowed(refs.materialPreset, refs.materialPreset.value, allowedFamilies)) {
+    markMaterialPresetCustom();
+  }
+  if (!isPresetValueAllowed(refs.steelPreset, refs.steelPreset.value, allowedFamilies)) {
+    markSteelPresetCustom();
+  }
+}
+
 function applyCodeModePreset(notify: boolean): void {
   const codeMode = refs.codeMode.value as CodeMode;
+  syncPresetVisibilityForCodeMode();
   if (codeMode !== "aci318_19") return;
 
   refs.gammaC.value = "1.00";
@@ -2054,6 +2512,120 @@ function applyCodeModePreset(notify: boolean): void {
   }
 }
 
+function applyMaterialPresetFromSelection(value: string): void {
+  if (value === "custom") {
+    return;
+  }
+  const preset = getMaterialPreset(value);
+  if (!preset) {
+    setSelectValue(refs.materialPreset, "custom", "custom");
+    localStorage.setItem("pmm-material-preset", "custom");
+    return;
+  }
+
+  refs.fck.value = String(preset.fck);
+  refs.fyk.value = String(preset.fyk);
+  refs.gammaC.value = String(preset.gammaC);
+  refs.gammaS.value = String(preset.gammaS);
+  refs.es.value = String(preset.es);
+  refs.epsCu.value = String(preset.epsCu);
+  const preferredSteelPreset = getPreferredSteelPresetForMaterial(value, preset.fyk);
+  if (preferredSteelPreset) {
+    setSelectValue(refs.steelPreset, preferredSteelPreset, "custom");
+    localStorage.setItem("pmm-steel-preset", preferredSteelPreset);
+  } else {
+    syncSteelPresetFromFyk();
+  }
+  setSelectValue(refs.materialPreset, value, "custom");
+  localStorage.setItem("pmm-material-preset", value);
+}
+
+function markMaterialPresetCustom(): void {
+  setSelectValue(refs.materialPreset, "custom", "custom");
+  localStorage.setItem("pmm-material-preset", "custom");
+}
+
+function getPreferredSteelPresetForMaterial(materialPresetId: string, fyk: number): SteelPresetId | null {
+  if (materialPresetId.startsWith("ts500-")) {
+    if (approxEq(fyk, 220, 1e-9)) return "steel-ts500-s220";
+    if (approxEq(fyk, 275, 1e-9)) return "steel-ts500-s275";
+    if (approxEq(fyk, 320, 1e-9)) return "steel-ts500-s320";
+    if (approxEq(fyk, 420, 1e-9)) return "steel-ts500-s420";
+    if (approxEq(fyk, 500, 1e-9)) return "steel-ts500-s500";
+  }
+
+  if (materialPresetId.startsWith("eu-")) {
+    if (approxEq(fyk, 400, 1e-9)) return "steel-eu-b400";
+    if (approxEq(fyk, 500, 1e-9)) return "steel-eu-b500b";
+    if (approxEq(fyk, 550, 1e-9)) return "steel-eu-b550b";
+    if (approxEq(fyk, 600, 1e-9)) return "steel-eu-b600b";
+  }
+
+  if (materialPresetId.startsWith("aci-")) {
+    if (approxEq(fyk, 276, 1e-9)) return "steel-aci-gr40";
+    if (approxEq(fyk, 414, 1e-9)) return "steel-aci-gr60";
+    if (approxEq(fyk, 517, 1e-9)) return "steel-aci-gr75";
+    if (approxEq(fyk, 420, 6.5)) return "steel-aci-gr60";
+  }
+
+  return null;
+}
+
+function syncSteelPresetFromFyk(): void {
+  const fyk = Number(refs.fyk.value);
+  if (!Number.isFinite(fyk)) {
+    markSteelPresetCustom();
+    return;
+  }
+
+  const matches = (Object.keys(STEEL_PRESETS) as SteelPresetId[]).filter((key) =>
+    approxEq(STEEL_PRESETS[key].fyk, fyk, 1e-9),
+  );
+
+  if (matches.length === 1) {
+    setSelectValue(refs.steelPreset, matches[0], "custom");
+    localStorage.setItem("pmm-steel-preset", matches[0]);
+    return;
+  }
+
+  if (matches.length > 1 && isSteelPresetId(refs.steelPreset.value)) {
+    if (matches.includes(refs.steelPreset.value as SteelPresetId)) {
+      setSelectValue(refs.steelPreset, refs.steelPreset.value, "custom");
+      localStorage.setItem("pmm-steel-preset", refs.steelPreset.value);
+      return;
+    }
+  }
+
+  if (matches.length > 1) {
+    setSelectValue(refs.steelPreset, "custom", "custom");
+    localStorage.setItem("pmm-steel-preset", "custom");
+    return;
+  }
+
+  markSteelPresetCustom();
+}
+
+function applySteelPresetFromSelection(value: string): void {
+  if (value === "custom") {
+    return;
+  }
+  const preset = getSteelPreset(value);
+  if (!preset) {
+    setSelectValue(refs.steelPreset, "custom", "custom");
+    localStorage.setItem("pmm-steel-preset", "custom");
+    return;
+  }
+
+  refs.fyk.value = String(preset.fyk);
+  setSelectValue(refs.steelPreset, value, "custom");
+  localStorage.setItem("pmm-steel-preset", value);
+}
+
+function markSteelPresetCustom(): void {
+  setSelectValue(refs.steelPreset, "custom", "custom");
+  localStorage.setItem("pmm-steel-preset", "custom");
+}
+
 function bindSectionPreviewListeners(): void {
   const ids: HTMLElement[] = [
     refs.shape,
@@ -2063,6 +2635,11 @@ function bindSectionPreviewListeners(): void {
     refs.barsX,
     refs.barsY,
     refs.bars,
+    refs.doubleLayer,
+    refs.barsX2,
+    refs.barsY2,
+    refs.bars2,
+    refs.layerSpacing,
     refs.cover,
     refs.tieDia,
     refs.barDia,
@@ -2098,12 +2675,48 @@ interface SectionPreviewInput {
   barsX: number;
   barsY: number;
   bars: number;
+  useDoubleLayer: boolean;
+  barsX2: number;
+  barsY2: number;
+  bars2: number;
+  layerSpacingM: number;
   coverM: number;
   tieDiaM: number;
   barDiaM: number;
   tieSpacingConfMm: number;
   tieSpacingMidMm: number;
   coverToCenter: boolean;
+}
+
+interface RectBarLayerLayout {
+  layerIndex: number;
+  edgeM: number;
+  barsX: number;
+  barsY: number;
+  xLeft: number;
+  xRight: number;
+  yBot: number;
+  yTop: number;
+  sxM: number;
+  syM: number;
+  bars: XY[];
+}
+
+interface CircleBarLayerLayout {
+  layerIndex: number;
+  edgeM: number;
+  barCount: number;
+  radiusM: number;
+  sArcM: number;
+  bars: XY[];
+}
+
+interface SectionRebarLayout {
+  bars: XY[];
+  rectLayers: RectBarLayerLayout[];
+  circleLayers: CircleBarLayerLayout[];
+  spacingCenterMm: number[];
+  minPairCenterMm: number;
 }
 
 function parsePreviewNumber(v: string, fallback: number): number {
@@ -2121,6 +2734,11 @@ function collectSectionPreviewInput(): SectionPreviewInput | null {
     barsX: Math.max(2, Math.round(parsePreviewNumber(refs.barsX.value, 2))),
     barsY: Math.max(2, Math.round(parsePreviewNumber(refs.barsY.value, 2))),
     bars: Math.max(3, Math.round(parsePreviewNumber(refs.bars.value, 3))),
+    useDoubleLayer: refs.doubleLayer.checked,
+    barsX2: Math.max(2, Math.round(parsePreviewNumber(refs.barsX2.value, 2))),
+    barsY2: Math.max(2, Math.round(parsePreviewNumber(refs.barsY2.value, 2))),
+    bars2: Math.max(3, Math.round(parsePreviewNumber(refs.bars2.value, 3))),
+    layerSpacingM: parsePreviewNumber(refs.layerSpacing.value, 0) / 1000.0,
     coverM: parsePreviewNumber(refs.cover.value, 0),
     tieDiaM: parsePreviewNumber(refs.tieDia.value, 0) / 1000.0,
     barDiaM: parsePreviewNumber(refs.barDia.value, 0) / 1000.0,
@@ -2130,6 +2748,7 @@ function collectSectionPreviewInput(): SectionPreviewInput | null {
   };
 
   if (input.barDiaM <= 0 || input.tieDiaM <= 0 || input.coverM <= 0) return null;
+  if (input.useDoubleLayer && input.layerSpacingM <= 0) return null;
   if (shape === "rect") {
     if (input.widthM <= 0 || input.heightM <= 0) return null;
   } else if (input.diameterM <= 0) {
@@ -2139,42 +2758,132 @@ function collectSectionPreviewInput(): SectionPreviewInput | null {
   return input;
 }
 
-function computeSectionBarCenters(input: SectionPreviewInput): XY[] {
-  const edge = input.coverToCenter ? input.coverM : input.coverM + input.tieDiaM + 0.5 * input.barDiaM;
+function barCenterEdgeM(input: Pick<SectionPreviewInput, "coverM" | "tieDiaM" | "barDiaM" | "coverToCenter">): number {
+  return input.coverToCenter ? input.coverM : input.coverM + input.tieDiaM + 0.5 * input.barDiaM;
+}
+
+function buildRectBarLayer(widthM: number, heightM: number, edgeM: number, barsX: number, barsY: number, layerIndex: number): RectBarLayerLayout | null {
+  if (barsX < 2 || barsY < 2) return null;
+  const hw = 0.5 * widthM;
+  const hh = 0.5 * heightM;
+  const xLeft = -hw + edgeM;
+  const xRight = hw - edgeM;
+  const yBot = -hh + edgeM;
+  const yTop = hh - edgeM;
+  if (xLeft >= xRight || yBot >= yTop) return null;
+
+  const sxM = barsX > 1 ? (xRight - xLeft) / (barsX - 1) : 0;
+  const syM = barsY > 1 ? (yTop - yBot) / (barsY - 1) : 0;
   const bars: XY[] = [];
+
+  for (let i = 0; i < barsX; i++) {
+    const x = xLeft + i * sxM;
+    bars.push({ x, y: yTop });
+    bars.push({ x, y: yBot });
+  }
+  for (let j = 1; j < barsY - 1; j++) {
+    const y = yBot + j * syM;
+    bars.push({ x: xLeft, y });
+    bars.push({ x: xRight, y });
+  }
+
+  return { layerIndex, edgeM, barsX, barsY, xLeft, xRight, yBot, yTop, sxM, syM, bars };
+}
+
+function buildCircleBarLayer(diameterM: number, edgeM: number, barCount: number, layerIndex: number): CircleBarLayerLayout | null {
+  if (barCount < 3) return null;
+  const radiusM = 0.5 * diameterM - edgeM;
+  if (radiusM <= 0) return null;
+  const sArcM = (2 * Math.PI * radiusM) / barCount;
+  const bars: XY[] = [];
+  for (let i = 0; i < barCount; i++) {
+    const angle = (2 * Math.PI * i) / barCount;
+    bars.push({ x: radiusM * Math.cos(angle), y: radiusM * Math.sin(angle) });
+  }
+  return { layerIndex, edgeM, barCount, radiusM, sArcM, bars };
+}
+
+function calcMinPairCenterMm(bars: XY[]): number {
+  if (bars.length < 2) return Number.POSITIVE_INFINITY;
+  let minDist = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < bars.length; i++) {
+    for (let j = i + 1; j < bars.length; j++) {
+      const dx = bars[i].x - bars[j].x;
+      const dy = bars[i].y - bars[j].y;
+      const distMm = Math.sqrt(dx * dx + dy * dy) * 1000.0;
+      if (distMm < minDist) minDist = distMm;
+    }
+  }
+  return minDist;
+}
+
+function buildSectionRebarLayout(input: SectionPreviewInput): SectionRebarLayout | null {
+  const outerEdgeM = barCenterEdgeM(input);
+  const spacingCenterMm: number[] = [];
+  const rectLayers: RectBarLayerLayout[] = [];
+  const circleLayers: CircleBarLayerLayout[] = [];
+
   if (input.shape === "rect") {
-    const hw = 0.5 * input.widthM;
-    const hh = 0.5 * input.heightM;
-    const xLeft = -hw + edge;
-    const xRight = hw - edge;
-    const yBot = -hh + edge;
-    const yTop = hh - edge;
-    if (xLeft >= xRight || yBot >= yTop) return bars;
+    const outer = buildRectBarLayer(input.widthM, input.heightM, outerEdgeM, input.barsX, input.barsY, 1);
+    if (!outer) return null;
+    rectLayers.push(outer);
+    if (Number.isFinite(outer.sxM) && outer.sxM > 0) spacingCenterMm.push(outer.sxM * 1000.0);
+    if (Number.isFinite(outer.syM) && outer.syM > 0) spacingCenterMm.push(outer.syM * 1000.0);
 
-    const sx = input.barsX > 1 ? (xRight - xLeft) / (input.barsX - 1) : 0;
-    const sy = input.barsY > 1 ? (yTop - yBot) / (input.barsY - 1) : 0;
+    if (input.useDoubleLayer) {
+      const inner = buildRectBarLayer(input.widthM, input.heightM, outerEdgeM + input.layerSpacingM, input.barsX2, input.barsY2, 2);
+      if (!inner) return null;
+      rectLayers.push(inner);
+      if (Number.isFinite(inner.sxM) && inner.sxM > 0) spacingCenterMm.push(inner.sxM * 1000.0);
+      if (Number.isFinite(inner.syM) && inner.syM > 0) spacingCenterMm.push(inner.syM * 1000.0);
+      spacingCenterMm.push(input.layerSpacingM * 1000.0);
+    }
+  } else {
+    const outer = buildCircleBarLayer(input.diameterM, outerEdgeM, input.bars, 1);
+    if (!outer) return null;
+    circleLayers.push(outer);
+    if (Number.isFinite(outer.sArcM) && outer.sArcM > 0) spacingCenterMm.push(outer.sArcM * 1000.0);
 
-    for (let i = 0; i < input.barsX; i++) {
-      const x = xLeft + i * sx;
-      bars.push({ x, y: yTop });
-      bars.push({ x, y: yBot });
+    if (input.useDoubleLayer) {
+      const inner = buildCircleBarLayer(input.diameterM, outerEdgeM + input.layerSpacingM, input.bars2, 2);
+      if (!inner) return null;
+      circleLayers.push(inner);
+      if (Number.isFinite(inner.sArcM) && inner.sArcM > 0) spacingCenterMm.push(inner.sArcM * 1000.0);
+      spacingCenterMm.push(input.layerSpacingM * 1000.0);
     }
-    for (let j = 1; j < input.barsY - 1; j++) {
-      const y = yBot + j * sy;
-      bars.push({ x: xLeft, y });
-      bars.push({ x: xRight, y });
-    }
-    return bars;
   }
 
-  const r = 0.5 * input.diameterM;
-  const rb = r - edge;
-  if (rb <= 0) return bars;
-  for (let i = 0; i < input.bars; i++) {
-    const a = (2 * Math.PI * i) / input.bars;
-    bars.push({ x: rb * Math.cos(a), y: rb * Math.sin(a) });
-  }
-  return bars;
+  const bars = rectLayers.flatMap((layer) => layer.bars).concat(circleLayers.flatMap((layer) => layer.bars));
+  return {
+    bars,
+    rectLayers,
+    circleLayers,
+    spacingCenterMm,
+    minPairCenterMm: calcMinPairCenterMm(bars),
+  };
+}
+
+function sectionPreviewInputFromAppInput(input: AppInput): SectionPreviewInput {
+  return {
+    shape: input.shape,
+    widthM: input.widthM,
+    heightM: input.heightM,
+    diameterM: input.diameterM,
+    barsX: input.barsX,
+    barsY: input.barsY,
+    bars: input.bars,
+    useDoubleLayer: input.useDoubleLayer,
+    barsX2: input.barsX2,
+    barsY2: input.barsY2,
+    bars2: input.bars2,
+    layerSpacingM: input.layerSpacingMm / 1000.0,
+    coverM: input.coverM,
+    tieDiaM: input.tieDiaMm / 1000.0,
+    barDiaM: input.barDiaMm / 1000.0,
+    tieSpacingConfMm: input.tieSpacingConfMm,
+    tieSpacingMidMm: input.tieSpacingMidMm,
+    coverToCenter: input.coverToCenter,
+  };
 }
 
 function previewMmText(valueMm: number, decimals = 0): string {
@@ -2352,7 +3061,12 @@ function renderSectionPreview(): void {
   }
 
   const tieCenterEdge = input.coverToCenter ? input.coverM - 0.5 * input.barDiaM : input.coverM + 0.5 * input.tieDiaM;
-  const bars = computeSectionBarCenters(input);
+  const rebarLayout = buildSectionRebarLayout(input);
+  if (!rebarLayout) {
+    refs.sectionPreviewMeta.textContent = state.lang === "en" ? "Double-layer bar geometry is invalid." : "Çift sıra donatı geometrisi geçersiz.";
+    return;
+  }
+  const bars = rebarLayout.bars;
   const noteLeft = w - 188;
   const plotLeft = 34;
   const plotRight = noteLeft - 18;
@@ -2384,7 +3098,6 @@ function renderSectionPreview(): void {
   if (input.shape === "rect") {
     const hw = 0.5 * input.widthM;
     const hh = 0.5 * input.heightM;
-    const edge = input.coverToCenter ? input.coverM : input.coverM + input.tieDiaM + 0.5 * input.barDiaM;
     const xL = sx(-hw);
     const yT = sy(hh);
     const widthPx = 2 * hw * scale;
@@ -2407,9 +3120,7 @@ function renderSectionPreview(): void {
     drawDimHorizontal(ctx, sx(-hw), sx(hw), sy(-hh), sy(-hh) + 26, `b=${previewMmText(input.widthM * 1000, 0)}`, techLine);
     drawDimVertical(ctx, sy(hh), sy(-hh), sx(-hw), sx(-hw) - 24, `h=${previewMmText(input.heightM * 1000, 0)}`, techLine);
 
-    const yTopBar = hh - edge;
-    const xRightBar = hw - edge;
-    const tol = Math.max(1e-6, edge * 1e-4);
+    const outerLayer = rebarLayout.rectLayers[0];
 
     if (chw > 0 && chh > 0) {
       drawLeader(
@@ -2423,12 +3134,12 @@ function renderSectionPreview(): void {
       );
     }
 
-    if (input.barsX > 1) {
-      const topBars = bars
-        .filter((b) => Math.abs(b.y - yTopBar) < tol)
+    if (outerLayer && outerLayer.barsX > 1) {
+      const topBars = outerLayer.bars
+        .filter((b) => Math.abs(b.y - outerLayer.yTop) < 1e-9)
         .sort((a, b) => a.x - b.x);
       if (topBars.length > 1) {
-        const sVal = ((topBars[1].x - topBars[0].x) * 1000);
+        const sVal = (topBars[1].x - topBars[0].x) * 1000;
         const midX = sx((topBars[0].x + topBars[1].x) * 0.5);
         const barY = sy(topBars[0].y);
         drawLeader(
@@ -2442,12 +3153,12 @@ function renderSectionPreview(): void {
         );
       }
     }
-    if (input.barsY > 2) {
-      const rightBars = bars
-        .filter((b) => Math.abs(b.x - xRightBar) < tol)
+    if (outerLayer && outerLayer.barsY > 2) {
+      const rightBars = outerLayer.bars
+        .filter((b) => Math.abs(b.x - outerLayer.xRight) < 1e-9)
         .sort((a, b) => a.y - b.y);
       if (rightBars.length > 1) {
-        const sVal = ((rightBars[1].y - rightBars[0].y) * 1000);
+        const sVal = (rightBars[1].y - rightBars[0].y) * 1000;
         const midY = sy((rightBars[0].y + rightBars[1].y) * 0.5);
         drawLeader(
           ctx,
@@ -2460,6 +3171,18 @@ function renderSectionPreview(): void {
         );
       }
     }
+    if (rebarLayout.rectLayers.length > 1) {
+      const innerLayer = rebarLayout.rectLayers[1];
+      drawLeader(
+        ctx,
+        sx((outerLayer.xLeft + innerLayer.xLeft) * 0.5),
+        sy((outerLayer.yTop + innerLayer.yTop) * 0.5),
+        xL + widthPx + 52,
+        Math.min(plotBottom - 14, yT + heightPx * 0.28),
+        `a_row=${previewMmText(input.layerSpacingM * 1000.0, 0)}`,
+        techLine
+      );
+    }
   } else {
     const r = 0.5 * input.diameterM;
     ctx.fillStyle = state.theme === "light" ? "rgba(232, 241, 246, 0.92)" : "rgba(10, 25, 36, 0.92)";
@@ -2471,6 +3194,7 @@ function renderSectionPreview(): void {
     drawHatchCircle(ctx, cx, cy, r * scale, hatchColor);
     ctx.stroke();
 
+    const outerRing = rebarLayout.circleLayers[0];
     const rc = r - tieCenterEdge;
     if (rc > 0) {
       ctx.strokeStyle = techLine;
@@ -2482,6 +3206,18 @@ function renderSectionPreview(): void {
     }
 
     drawDimHorizontal(ctx, cx - r * scale, cx + r * scale, cy + r * scale, cy + r * scale + 24, `D=${previewMmText(input.diameterM * 1000, 0)}`, techLine);
+    if (rebarLayout.circleLayers.length > 1 && outerRing) {
+      const innerRing = rebarLayout.circleLayers[1];
+      drawLeader(
+        ctx,
+        cx - (outerRing.radiusM + innerRing.radiusM) * 0.5 * scale,
+        cy,
+        cx - r * scale - 52,
+        cy + 24,
+        `a_row=${previewMmText(input.layerSpacingM * 1000.0, 0)}`,
+        techLine
+      );
+    }
   }
 
   const barR = Math.max(2.2, 0.5 * input.barDiaM * scale);
@@ -2501,14 +3237,19 @@ function renderSectionPreview(): void {
     `n = ${bars.length}`,
     `Øboy = ${previewMmText(input.barDiaM * 1000, 0)}`,
     `Øetr = ${previewMmText(input.tieDiaM * 1000, 0)}`,
+    input.shape === "rect"
+      ? `L1: ${input.barsX}/${input.barsY}${input.useDoubleLayer ? `, L2: ${input.barsX2}/${input.barsY2}` : ""}`
+      : `L1: ${input.bars}${input.useDoubleLayer ? `, L2: ${input.bars2}` : ""}`,
     `s_conf = ${previewMmText(input.tieSpacingConfMm, 0)}`,
     `s_mid = ${previewMmText(input.tieSpacingMidMm, 0)}`,
   ];
+  if (input.useDoubleLayer) noteLines.splice(4, 0, `a_row = ${previewMmText(input.layerSpacingM * 1000, 0)}`);
   ctx.fillStyle = noteFill;
   ctx.strokeStyle = techFine;
   ctx.lineWidth = 1;
-  ctx.fillRect(noteLeft, noteTop, noteWidth, 108);
-  ctx.strokeRect(noteLeft, noteTop, noteWidth, 108);
+  const noteHeight = 18 + noteLines.length * 18;
+  ctx.fillRect(noteLeft, noteTop, noteWidth, noteHeight);
+  ctx.strokeRect(noteLeft, noteTop, noteWidth, noteHeight);
   ctx.fillStyle = techLine;
   ctx.font = "11px 'IBM Plex Mono'";
   ctx.textAlign = "left";
@@ -3171,6 +3912,11 @@ function collectInputForSection(sec: SectionDef, loads: LoadCase[]): AppInput {
     barsX: ni(sec.barsX),
     barsY: ni(sec.barsY),
     bars: ni(sec.bars),
+    useDoubleLayer: sec.useDoubleLayer,
+    barsX2: ni(sec.barsX2),
+    barsY2: ni(sec.barsY2),
+    bars2: ni(sec.bars2),
+    layerSpacingMm: n(sec.layerSpacing),
     coverM: n(sec.cover),
     tieDiaMm: n(sec.tieDia),
     barDiaMm: n(sec.barDia),
@@ -3197,7 +3943,8 @@ function collectInputForSection(sec: SectionDef, loads: LoadCase[]): AppInput {
 
 function calcLongitudinalRatioPct(input: AppInput): number {
   const barDiaM = input.barDiaMm / 1000.0;
-  const nBars = input.shape === "rect" ? (2 * input.barsX + 2 * Math.max(0, input.barsY - 2)) : input.bars;
+  const layout = buildSectionRebarLayout(sectionPreviewInputFromAppInput(input));
+  const nBars = layout ? layout.bars.length : 0;
   const areaM2 = input.shape === "rect"
     ? input.widthM * input.heightM
     : Math.PI * (input.diameterM * 0.5) * (input.diameterM * 0.5);
@@ -3216,6 +3963,7 @@ function configureWasm(wasm: WasmExports, input: AppInput, designOverride?: Desi
   const tieDiaM = input.tieDiaMm / 1000.0;
   const barDiaM = input.barDiaMm / 1000.0;
   const tieSpacingConfM = input.tieSpacingConfMm / 1000.0;
+  const layerSpacingM = input.layerSpacingMm / 1000.0;
   const strengths = resolveDesignStrengths(input);
   const concreteModelId = input.concreteModel === "mander_core_cover" ? 1 : 0;
   const phiP = designOverride?.phiP ?? input.phiP;
@@ -3233,6 +3981,10 @@ function configureWasm(wasm: WasmExports, input: AppInput, designOverride?: Desi
       barDiaM,
       input.barsX,
       input.barsY,
+      input.useDoubleLayer ? 1 : 0,
+      input.barsX2,
+      input.barsY2,
+      layerSpacingM,
       input.coverToCenter ? 1 : 0,
       strengths.fckPmm,
       strengths.fykPmm,
@@ -3252,6 +4004,9 @@ function configureWasm(wasm: WasmExports, input: AppInput, designOverride?: Desi
     tieDiaM,
     barDiaM,
     input.bars,
+    input.useDoubleLayer ? 1 : 0,
+    input.bars2,
+    layerSpacingM,
     input.coverToCenter ? 1 : 0,
     strengths.fckPmm,
     strengths.fykPmm,
@@ -3267,6 +4022,7 @@ function configureWasm(wasm: WasmExports, input: AppInput, designOverride?: Desi
 function evaluateCompliance(input: AppInput): ComplianceCheck[] {
   const out: ComplianceCheck[] = [];
   const strengths = resolveDesignStrengths(input);
+  const rebarLayout = buildSectionRebarLayout(sectionPreviewInputFromAppInput(input));
 
   const barDiaM = input.barDiaMm / 1000.0;
   const coverNetMm = (
@@ -3274,7 +4030,11 @@ function evaluateCompliance(input: AppInput): ComplianceCheck[] {
       ? input.coverM - input.tieDiaMm / 1000.0 - input.barDiaMm / 2000.0
       : input.coverM
   ) * 1000.0;
-  const nBars = input.shape === "rect" ? (2 * input.barsX + 2 * Math.max(0, input.barsY - 2)) : input.bars;
+  const nBars = rebarLayout ? rebarLayout.bars.length : (
+    input.shape === "rect"
+      ? countRectPerimeterBars(input.barsX, input.barsY) + (input.useDoubleLayer ? countRectPerimeterBars(input.barsX2, input.barsY2) : 0)
+      : input.bars + (input.useDoubleLayer ? input.bars2 : 0)
+  );
   const areaM2 = input.shape === "rect"
     ? input.widthM * input.heightM
     : Math.PI * (input.diameterM * 0.5) * (input.diameterM * 0.5);
@@ -3593,30 +4353,31 @@ function evaluateCompliance(input: AppInput): ComplianceCheck[] {
     );
   }
 
-  const edgeM = input.coverToCenter
-    ? input.coverM
-    : input.coverM + (input.tieDiaMm / 1000.0) + (input.barDiaMm / 2000.0);
-
   let sCenterMax = Number.POSITIVE_INFINITY;
   let sCenterMin = Number.POSITIVE_INFINITY;
   let spacingValueText = "";
 
-  if (input.shape === "rect") {
-    const xSpanMm = Math.max(0, (input.widthM - 2.0 * edgeM) * 1000.0);
-    const ySpanMm = Math.max(0, (input.heightM - 2.0 * edgeM) * 1000.0);
-    const sx = input.barsX > 1 ? xSpanMm / (input.barsX - 1) : Number.POSITIVE_INFINITY;
-    const sy = input.barsY > 1 ? ySpanMm / (input.barsY - 1) : Number.POSITIVE_INFINITY;
-    sCenterMax = Math.max(sx, sy);
-    sCenterMin = Math.min(sx, sy);
-    spacingValueText = `(sx=${fmt(sx, 1)}, sy=${fmt(sy, 1)})`;
-  } else {
-    const rBarM = 0.5 * input.diameterM - edgeM;
-    const sArcMm = rBarM > 0 && nBars > 0
-      ? (2.0 * Math.PI * rBarM * 1000.0) / nBars
-      : Number.POSITIVE_INFINITY;
-    sCenterMax = sArcMm;
-    sCenterMin = sArcMm;
-    spacingValueText = `(s_arc=${fmt(sArcMm, 1)} mm)`;
+  if (rebarLayout) {
+    const spacingCandidates = rebarLayout.spacingCenterMm.filter((value) => Number.isFinite(value) && value > 0);
+    if (spacingCandidates.length > 0) {
+      sCenterMax = Math.max(...spacingCandidates);
+    }
+    sCenterMin = rebarLayout.minPairCenterMm;
+
+    if (input.shape === "rect" && rebarLayout.rectLayers.length > 0) {
+      spacingValueText = rebarLayout.rectLayers
+        .map((layer) => `L${layer.layerIndex}[sx=${fmt(layer.sxM * 1000.0, 1)}, sy=${fmt(layer.syM * 1000.0, 1)}]`)
+        .join(", ");
+    } else if (input.shape === "circle" && rebarLayout.circleLayers.length > 0) {
+      spacingValueText = rebarLayout.circleLayers
+        .map((layer) => `L${layer.layerIndex}[s_arc=${fmt(layer.sArcM * 1000.0, 1)} mm]`)
+        .join(", ");
+    }
+    if (input.useDoubleLayer) {
+      spacingValueText = spacingValueText.length > 0
+        ? `${spacingValueText}, a_row=${fmt(input.layerSpacingMm, 1)}`
+        : `a_row=${fmt(input.layerSpacingMm, 1)}`;
+    }
   }
 
   addCheck(
@@ -3630,7 +4391,7 @@ function evaluateCompliance(input: AppInput): ComplianceCheck[] {
     "TS500 s.25"
   );
 
-  const sClearMin = sCenterMin - input.barDiaMm;
+  const sClearMin = Number.isFinite(sCenterMin) ? sCenterMin - input.barDiaMm : Number.NEGATIVE_INFINITY;
   const sClearLimit = Math.max(1.5 * input.barDiaMm, 40.0);
   addCheck(
     out,
@@ -5214,7 +5975,9 @@ async function handleReportLogoSelection(): Promise<void> {
 }
 
 function setSelectValue(select: HTMLSelectElement, value: string, fallback: string): void {
-  const safe = Array.from(select.options).some((option) => option.value === value) ? value : fallback;
+  const safe = Array.from(select.options).some((option) => option.value === value && !option.disabled && !option.hidden)
+    ? value
+    : fallback;
   select.value = safe;
 }
 
@@ -5245,16 +6008,23 @@ function collectProjectFile(): ProjectFileV1 {
     version: 1,
     savedAt: new Date().toISOString(),
     sections: state.sections.map((s) => ({ ...s })),
-    input: {
-      codeMode: refs.codeMode.value as CodeMode,
-      concreteModel: refs.concreteModel.value as ConcreteModel,
-      shape: activeSec.shape,
+      input: {
+        codeMode: refs.codeMode.value as CodeMode,
+        concreteModel: refs.concreteModel.value as ConcreteModel,
+        materialPreset: refs.materialPreset.value,
+        steelPreset: refs.steelPreset.value,
+        shape: activeSec.shape,
       width: activeSec.width,
       height: activeSec.height,
       diameter: activeSec.diameter,
       barsX: activeSec.barsX,
       barsY: activeSec.barsY,
       bars: activeSec.bars,
+      useDoubleLayer: activeSec.useDoubleLayer,
+      barsX2: activeSec.barsX2,
+      barsY2: activeSec.barsY2,
+      bars2: activeSec.bars2,
+      layerSpacing: activeSec.layerSpacing,
       cover: activeSec.cover,
       tieDia: activeSec.tieDia,
       barDia: activeSec.barDia,
@@ -5340,6 +6110,8 @@ function parseProjectFile(text: string): ProjectFileV1 {
 
   const codeModeRaw = readRecordString(inputRaw, "codeMode", "ts500_tbdy");
   const concreteModelRaw = readRecordString(inputRaw, "concreteModel", "mander_core_cover");
+  const materialPresetRaw = readRecordString(inputRaw, "materialPreset", "custom");
+  const steelPresetRaw = readRecordString(inputRaw, "steelPreset", "custom");
   const shapeRaw = readRecordString(inputRaw, "shape", "rect");
   const pSignRaw = readRecordString(inputRaw, "pSign", "compression_positive");
 
@@ -5367,6 +6139,11 @@ function parseProjectFile(text: string): ProjectFileV1 {
         barsX: readRecordString(s, "barsX", "4"),
         barsY: readRecordString(s, "barsY", "4"),
         bars: readRecordString(s, "bars", "12"),
+        useDoubleLayer: readRecordBoolean(s, "useDoubleLayer", false),
+        barsX2: readRecordString(s, "barsX2", "2"),
+        barsY2: readRecordString(s, "barsY2", "2"),
+        bars2: readRecordString(s, "bars2", "6"),
+        layerSpacing: readRecordString(s, "layerSpacing", "60"),
         cover: readRecordString(s, "cover", "0.04"),
         tieDia: readRecordString(s, "tieDia", "10"),
         barDia: readRecordString(s, "barDia", "16"),
@@ -5381,16 +6158,23 @@ function parseProjectFile(text: string): ProjectFileV1 {
     version: 1,
     savedAt: typeof raw.savedAt === "string" ? raw.savedAt : new Date().toISOString(),
     sections: parsedSections.length > 0 ? parsedSections : undefined,
-    input: {
-      codeMode: codeModeRaw === "ts500" || codeModeRaw === "ts500_tbdy" || codeModeRaw === "aci318_19" ? codeModeRaw : "ts500_tbdy",
-      concreteModel: concreteModelRaw === "ts500_block" || concreteModelRaw === "mander_core_cover" ? concreteModelRaw : "mander_core_cover",
-      shape: shapeRaw === "rect" || shapeRaw === "circle" ? shapeRaw : "rect",
+      input: {
+        codeMode: codeModeRaw === "ts500" || codeModeRaw === "ts500_tbdy" || codeModeRaw === "aci318_19" ? codeModeRaw : "ts500_tbdy",
+        concreteModel: concreteModelRaw === "ts500_block" || concreteModelRaw === "mander_core_cover" ? concreteModelRaw : "mander_core_cover",
+        materialPreset: isMaterialPresetId(materialPresetRaw) ? materialPresetRaw : "custom",
+        steelPreset: isSteelPresetId(steelPresetRaw) ? steelPresetRaw : "custom",
+        shape: shapeRaw === "rect" || shapeRaw === "circle" ? shapeRaw : "rect",
       width: readRecordString(inputRaw, "width", refs.width.value),
       height: readRecordString(inputRaw, "height", refs.height.value),
       diameter: readRecordString(inputRaw, "diameter", refs.diameter.value),
       barsX: readRecordString(inputRaw, "barsX", refs.barsX.value),
       barsY: readRecordString(inputRaw, "barsY", refs.barsY.value),
       bars: readRecordString(inputRaw, "bars", refs.bars.value),
+      useDoubleLayer: readRecordBoolean(inputRaw, "useDoubleLayer", refs.doubleLayer.checked),
+      barsX2: readRecordString(inputRaw, "barsX2", refs.barsX2.value),
+      barsY2: readRecordString(inputRaw, "barsY2", refs.barsY2.value),
+      bars2: readRecordString(inputRaw, "bars2", refs.bars2.value),
+      layerSpacing: readRecordString(inputRaw, "layerSpacing", refs.layerSpacing.value),
       cover: readRecordString(inputRaw, "cover", refs.cover.value),
       tieDia: readRecordString(inputRaw, "tieDia", refs.tieDia.value),
       barDia: readRecordString(inputRaw, "barDia", refs.barDia.value),
@@ -5491,6 +6275,8 @@ function clearAnalysisOutputs(): void {
 function persistProjectPrefs(): void {
   localStorage.setItem("pmm-code-mode", refs.codeMode.value);
   localStorage.setItem("pmm-concrete-model", refs.concreteModel.value);
+  localStorage.setItem("pmm-material-preset", refs.materialPreset.value);
+  localStorage.setItem("pmm-steel-preset", refs.steelPreset.value);
   localStorage.setItem("pmm-p-sign", refs.pSign.value);
   localStorage.setItem("pmm-expected-strength", refs.useExpectedStrength.checked ? "1" : "0");
   localStorage.setItem("pmm-expected-fck-factor", refs.expectedFckFactor.value);
@@ -5504,6 +6290,26 @@ function persistProjectPrefs(): void {
 function applyProjectFile(project: ProjectFileV1): void {
   setSelectValue(refs.codeMode, project.input.codeMode, "ts500_tbdy");
   setSelectValue(refs.concreteModel, project.input.concreteModel, "mander_core_cover");
+  syncPresetVisibilityForCodeMode();
+  const materialPreset = isMaterialPresetId(project.input.materialPreset) ? project.input.materialPreset : "custom";
+  setSelectValue(refs.materialPreset, materialPreset, "custom");
+  if (materialPreset !== "custom") {
+    applyMaterialPresetFromSelection(materialPreset);
+  } else {
+    setTextValue(refs.fck, project.input.fck, "30");
+    setTextValue(refs.gammaC, project.input.gammaC, "1.5");
+    setTextValue(refs.gammaS, project.input.gammaS, "1.15");
+    setTextValue(refs.es, project.input.es, "200000");
+    setTextValue(refs.epsCu, project.input.epsCu, "0.003");
+  }
+
+  const steelPreset = isSteelPresetId(project.input.steelPreset) ? project.input.steelPreset : "custom";
+  setSelectValue(refs.steelPreset, steelPreset, "custom");
+  if (steelPreset !== "custom") {
+    applySteelPresetFromSelection(steelPreset);
+  } else {
+    setTextValue(refs.fyk, project.input.fyk, materialPreset === "custom" ? "420" : refs.fyk.value);
+  }
 
   // Restore sections: use saved sections array, or fall back to single section from input
   if (project.sections && project.sections.length > 0) {
@@ -5516,7 +6322,13 @@ function applyProjectFile(project: ProjectFileV1): void {
       width: project.input.width || "0.40", height: project.input.height || "0.60",
       diameter: project.input.diameter || "0.60",
       barsX: project.input.barsX || "4", barsY: project.input.barsY || "4",
-      bars: project.input.bars || "12", cover: project.input.cover || "0.04",
+      bars: project.input.bars || "12",
+      useDoubleLayer: project.input.useDoubleLayer,
+      barsX2: project.input.barsX2 || "2",
+      barsY2: project.input.barsY2 || "2",
+      bars2: project.input.bars2 || "6",
+      layerSpacing: project.input.layerSpacing || "60",
+      cover: project.input.cover || "0.04",
       tieDia: project.input.tieDia || "10", barDia: project.input.barDia || "16",
       tieSpacingConf: project.input.tieSpacingConf || "100",
       tieSpacingMid: project.input.tieSpacingMid || "150",
@@ -5531,12 +6343,6 @@ function applyProjectFile(project: ProjectFileV1): void {
   refs.useExpectedStrength.checked = project.input.useExpectedStrength;
   setTextValue(refs.expectedFckFactor, project.input.expectedFckFactor, "1.30");
   setTextValue(refs.expectedFykFactor, project.input.expectedFykFactor, "1.20");
-  setTextValue(refs.fck, project.input.fck, "30");
-  setTextValue(refs.fyk, project.input.fyk, "420");
-  setTextValue(refs.gammaC, project.input.gammaC, "1.5");
-  setTextValue(refs.gammaS, project.input.gammaS, "1.15");
-  setTextValue(refs.es, project.input.es, "200000");
-  setTextValue(refs.epsCu, project.input.epsCu, "0.003");
   setTextValue(refs.mesh, project.input.mesh, "55");
   setTextValue(refs.nAngle, project.input.nAngle, "72");
   setTextValue(refs.nDepth, project.input.nDepth, "55");
@@ -5733,7 +6539,17 @@ function reportInputRows(input: AppInput): Array<[string, string]> {
     ["Beton modeli", input.concreteModel === "mander_core_cover" ? "Mander core+cover" : "TS500 eşdeğer blok"],
     ["Boyutlar", input.shape === "rect" ? `b=${fmt(input.widthM, 3)} m, h=${fmt(input.heightM, 3)} m` : `D=${fmt(input.diameterM, 3)} m`],
     ["Donatı", `Ø${fmt(input.barDiaMm, 0)} mm, etriye Ø${fmt(input.tieDiaMm, 0)} mm`],
-    ["Donatı düzeni", input.shape === "rect" ? `üst/alt=${input.barsX}, sol/sağ=${input.barsY}` : `toplam bar=${input.bars}`],
+    ["Donatı düzeni", input.shape === "rect"
+      ? (
+        input.useDoubleLayer
+          ? `1.sıra üst/alt=${input.barsX}, sol/sağ=${input.barsY}; 2.sıra üst/alt=${input.barsX2}, sol/sağ=${input.barsY2}; a_row=${fmt(input.layerSpacingMm, 0)} mm`
+          : `üst/alt=${input.barsX}, sol/sağ=${input.barsY}`
+      )
+      : (
+        input.useDoubleLayer
+          ? `1.halka=${input.bars}, 2.halka=${input.bars2}, a_row=${fmt(input.layerSpacingMm, 0)} mm`
+          : `toplam bar=${input.bars}`
+      )],
     ["Örtü", `${fmt(input.coverM, 3)} m (${input.coverToCenter ? "merkeze kadar" : "net örtü"})`],
     ["Malzemeler", `fck=${fmt(input.fck, 1)} MPa, fyk=${fmt(input.fyk, 1)} MPa, Es=${fmt(input.es, 0)} MPa`],
     ["Güvenlik", `gc=${fmt(input.gammaC, 2)}, gs=${fmt(input.gammaS, 2)}, phiP=${fmt(input.phiP, 2)}, phiM=${fmt(input.phiM, 2)}, cut-off=${fmt(input.pCutoffRatio, 2)}`],
@@ -6474,13 +7290,3 @@ function renderStrainDiagram(data: McData, idx: number): void {
     host.textContent = String(e);
   }
 }
-
-
-
-
-
-
-
-
-
-
