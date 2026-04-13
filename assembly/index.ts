@@ -97,6 +97,41 @@ function clearSectionData(): void {
   circleCoreR = 0.0;
 }
 
+function appendRectLayerBars(
+  xLeft: f64,
+  xRight: f64,
+  yBot: f64,
+  yTop: f64,
+  barsXCount: i32,
+  barsYCount: i32
+): void {
+  let sx = (barsXCount > 1) ? (xRight - xLeft) / <f64>(barsXCount - 1) : 0.0;
+  let sy = (barsYCount > 1) ? (yTop - yBot) / <f64>(barsYCount - 1) : 0.0;
+
+  for (let i = 0; i < barsXCount; i++) {
+    let x = xLeft + <f64>i * sx;
+    barsX.push(x);
+    barsY.push(yTop);
+    barsX.push(x);
+    barsY.push(yBot);
+  }
+  for (let j = 1; j < barsYCount - 1; j++) {
+    let y = yBot + <f64>j * sy;
+    barsX.push(xLeft);
+    barsY.push(y);
+    barsX.push(xRight);
+    barsY.push(y);
+  }
+}
+
+function appendCircleLayerBars(radius: f64, barCount: i32): void {
+  for (let i = 0; i < barCount; i++) {
+    let ang = TWO_PI * <f64>i / <f64>barCount;
+    barsX.push(radius * Math.cos(ang));
+    barsY.push(radius * Math.sin(ang));
+  }
+}
+
 function buildRectGeometry(
   width: f64,
   height: f64,
@@ -105,11 +140,16 @@ function buildRectGeometry(
   barDia: f64,
   barsXCount: i32,
   barsYCount: i32,
+  useDoubleLayer: i32,
+  barsX2Count: i32,
+  barsY2Count: i32,
+  layerSpacing: f64,
   mesh: i32,
   coverToCenter: i32
 ): i32 {
   if (width <= 0.0 || height <= 0.0) return 0;
   if (barsXCount < 2 || barsYCount < 2) return 0;
+  if (useDoubleLayer != 0 && (barsX2Count < 2 || barsY2Count < 2 || layerSpacing <= 0.0)) return 0;
   if (mesh < 10) return 0;
 
   clearSectionData();
@@ -153,23 +193,17 @@ function buildRectGeometry(
   let xRight = rectHalfW - edge;
   let yBot = -rectHalfH + edge;
   let yTop = rectHalfH - edge;
+  appendRectLayerBars(xLeft, xRight, yBot, yTop, barsXCount, barsYCount);
 
-  let sx = (barsXCount > 1) ? (xRight - xLeft) / <f64>(barsXCount - 1) : 0.0;
-  let sy = (barsYCount > 1) ? (yTop - yBot) / <f64>(barsYCount - 1) : 0.0;
-
-  for (let i = 0; i < barsXCount; i++) {
-    let x = xLeft + <f64>i * sx;
-    barsX.push(x);
-    barsY.push(yTop);
-    barsX.push(x);
-    barsY.push(yBot);
-  }
-  for (let j = 1; j < barsYCount - 1; j++) {
-    let y = yBot + <f64>j * sy;
-    barsX.push(xLeft);
-    barsY.push(y);
-    barsX.push(xRight);
-    barsY.push(y);
+  if (useDoubleLayer != 0) {
+    let innerEdge = edge + layerSpacing;
+    if (innerEdge >= rectHalfW || innerEdge >= rectHalfH) return 0;
+    let xLeft2 = -rectHalfW + innerEdge;
+    let xRight2 = rectHalfW - innerEdge;
+    let yBot2 = -rectHalfH + innerEdge;
+    let yTop2 = rectHalfH - innerEdge;
+    if (xLeft2 >= xRight2 || yBot2 >= yTop2) return 0;
+    appendRectLayerBars(xLeft2, xRight2, yBot2, yTop2, barsX2Count, barsY2Count);
   }
 
   sectionAsTotal = <f64>barsX.length * barArea;
@@ -182,11 +216,15 @@ function buildCircleGeometry(
   tieDia: f64,
   barDia: f64,
   barCount: i32,
+  useDoubleLayer: i32,
+  barCount2: i32,
+  layerSpacing: f64,
   mesh: i32,
   coverToCenter: i32
 ): i32 {
   if (diameter <= 0.0) return 0;
   if (barCount < 3) return 0;
+  if (useDoubleLayer != 0 && (barCount2 < 3 || layerSpacing <= 0.0)) return 0;
   if (mesh < 10) return 0;
 
   clearSectionData();
@@ -226,10 +264,11 @@ function buildCircleGeometry(
   }
 
   let barArea = Math.PI * barDia * barDia / 4.0;
-  for (let i = 0; i < barCount; i++) {
-    let ang = TWO_PI * <f64>i / <f64>barCount;
-    barsX.push(rb * Math.cos(ang));
-    barsY.push(rb * Math.sin(ang));
+  appendCircleLayerBars(rb, barCount);
+  if (useDoubleLayer != 0) {
+    let rb2 = circleR - edge - layerSpacing;
+    if (rb2 <= 0.0) return 0;
+    appendCircleLayerBars(rb2, barCount2);
   }
 
   sectionAsTotal = <f64>barsX.length * barArea;
@@ -641,6 +680,10 @@ export function configureRect(
   barDia: f64,
   barsXCount: i32,
   barsYCount: i32,
+  useDoubleLayer: i32,
+  barsX2Count: i32,
+  barsY2Count: i32,
+  layerSpacing: f64,
   coverToCenter: i32,
   fck: f64,
   fyk: f64,
@@ -660,6 +703,10 @@ export function configureRect(
     barDia,
     barsXCount,
     barsYCount,
+    useDoubleLayer,
+    barsX2Count,
+    barsY2Count,
+    layerSpacing,
     mesh,
     coverToCenter
   );
@@ -673,6 +720,9 @@ export function configureCircle(
   tieDia: f64,
   barDia: f64,
   barCount: i32,
+  useDoubleLayer: i32,
+  barCount2: i32,
+  layerSpacing: f64,
   coverToCenter: i32,
   fck: f64,
   fyk: f64,
@@ -684,7 +734,7 @@ export function configureCircle(
   nAngle: i32,
   nDepth: i32
 ): i32 {
-  let okGeom = buildCircleGeometry(diameter, cover, tieDia, barDia, barCount, mesh, coverToCenter);
+  let okGeom = buildCircleGeometry(diameter, cover, tieDia, barDia, barCount, useDoubleLayer, barCount2, layerSpacing, mesh, coverToCenter);
   if (okGeom == 0) return 0;
   return buildPmmPoints(fck, fyk, gammaC, gammaS, esMpa, epsCu, nAngle, nDepth, barDia);
 }
@@ -873,7 +923,16 @@ function bisectCForP(
   if (cHi <= cLo) return -1.0;
 
   let fTol = 0.5; // kN
-  let numSegments = 64;
+  let numSegments = 96;
+  if (phi < 2e-4) {
+    numSegments = 224;
+  } else if (phi < 2e-3) {
+    numSegments = 160;
+  } else if (phi > 0.04) {
+    numSegments = 192;
+  } else if (phi > 0.015) {
+    numSegments = 128;
+  }
   let dc = (cHi - cLo) / <f64>numSegments;
   if (dc <= EPS) return -1.0;
 
@@ -915,47 +974,89 @@ function bisectCForP(
 
   // No explicit sign change found: try around previous-step hint first.
   if (!hasBracket) {
-    if (cHint > 0.0) {
-      let span = dc * 2.0;
-      for (let k = 0; k < 7 && !hasBracket; k++) {
-        let cA = cHint - span;
-        if (cA < cLo) cA = cLo;
-        let cB = cHint + span;
-        if (cB > cHi) cB = cHi;
-        if (cB <= cA + EPS) {
-          span *= 2.0;
-          continue;
-        }
-
-        let seg = 16;
-        let dLocal = (cB - cA) / <f64>seg;
-        let cP = cA;
-        let fP = evalForceAtPhiC(nx, ny, cP, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
-        if (Math.abs(fP) < fTol) return cP;
-
-        for (let j = 1; j <= seg; j++) {
-          let cQ = cA + <f64>j * dLocal;
-          let fQ = evalForceAtPhiC(nx, ny, cQ, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
-          if (Math.abs(fQ) < fTol) return cQ;
-          if (fP * fQ <= 0.0) {
-            hasBracket = true;
-            bracketLo = cP;
-            bracketHi = cQ;
-            break;
-          }
-          cP = cQ;
-          fP = fQ;
-        }
-        span *= 2.0;
+    let localCenter = cHint > 0.0 ? cHint : bestC;
+    let span = dc * 1.5;
+    let minSpan = (cHi - cLo) / 256.0;
+    if (span < minSpan) span = minSpan;
+    for (let k = 0; k < 9 && !hasBracket; k++) {
+      let cA = localCenter - span;
+      if (cA < cLo) cA = cLo;
+      let cB = localCenter + span;
+      if (cB > cHi) cB = cHi;
+      if (cB <= cA + EPS) {
+        span *= 1.8;
+        continue;
       }
-    }
 
-    // Near-miss fallback: strict for Mander, slightly relaxed for TS500 block.
-    if (!hasBracket) {
-      let nearTol = concreteModel == 0 ? 5.0 : 1.0;
-      if (bestAbs < nearTol) return bestC;
-      return -1.0;
+      let seg = 24 + k * 8;
+      let dLocal = (cB - cA) / <f64>seg;
+      let cP = cA;
+      let fP = evalForceAtPhiC(nx, ny, cP, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
+      if (Math.abs(fP) < fTol) return cP;
+
+      for (let j = 1; j <= seg; j++) {
+        let cQ = cA + <f64>j * dLocal;
+        let fQ = evalForceAtPhiC(nx, ny, cQ, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
+        if (Math.abs(fQ) < fTol) return cQ;
+        if (fP * fQ <= 0.0) {
+          hasBracket = true;
+          bracketLo = cP;
+          bracketHi = cQ;
+          break;
+        }
+        cP = cQ;
+        fP = fQ;
+      }
+      span *= 1.8;
     }
+  }
+
+  if (!hasBracket) {
+    let span = dc;
+    let minSpan = (cHi - cLo) / 320.0;
+    if (span < minSpan) span = minSpan;
+    for (let k = 0; k < 8 && !hasBracket; k++) {
+      let cA = bestC - span;
+      if (cA < cLo) cA = cLo;
+      let cB = bestC + span;
+      if (cB > cHi) cB = cHi;
+      if (cB <= cA + EPS) {
+        span *= 1.8;
+        continue;
+      }
+
+      let seg = 28 + k * 8;
+      let dLocal = (cB - cA) / <f64>seg;
+      let cP = cA;
+      let fP = evalForceAtPhiC(nx, ny, cP, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
+      if (Math.abs(fP) < fTol) return cP;
+
+      for (let j = 1; j <= seg; j++) {
+        let cQ = cA + <f64>j * dLocal;
+        let fQ = evalForceAtPhiC(nx, ny, cQ, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
+        if (Math.abs(fQ) < fTol) return cQ;
+        if (fP * fQ <= 0.0) {
+          hasBracket = true;
+          bracketLo = cP;
+          bracketHi = cQ;
+          break;
+        }
+        cP = cQ;
+        fP = fQ;
+      }
+      span *= 1.8;
+    }
+  }
+
+  // Near-miss fallback: strict for Mander, slightly relaxed for TS500 block.
+  if (!hasBracket) {
+    let nearTol = concreteModel == 0 ? 3.0 : 0.6;
+    let relTol = Math.abs(pTarget) * (concreteModel == 0 ? 0.0012 : 0.0007);
+    nearTol += relTol;
+    let nearTolCap = concreteModel == 0 ? 10.0 : 4.0;
+    if (nearTol > nearTolCap) nearTol = nearTolCap;
+    if (bestAbs < nearTol) return bestC;
+    return -1.0;
   }
 
   let cA = bracketLo;

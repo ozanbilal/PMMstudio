@@ -1884,8 +1884,8 @@ tr.info td:nth-child(6) {
 /* Side-by-side plot row */
 .mc-plot-row {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(320px, 1.3fr) minmax(340px, 1.3fr);
-  gap: 12px;
+  grid-template-columns: minmax(360px, 1.95fr) minmax(300px, 1.15fr) minmax(320px, 1.05fr);
+  gap: 14px;
   min-height: 340px;
   align-items: stretch;
 }
@@ -2035,11 +2035,11 @@ tr.info td:nth-child(6) {
   position: fixed !important;
   inset: 12px !important;
   z-index: 9999;
-  background: color-mix(in srgb, var(--bg) 92%, black 8%) !important;
+  background: linear-gradient(180deg, var(--panel), var(--panel-2)) !important;
   border: 1px solid color-mix(in srgb, var(--line-strong) 88%, transparent);
   border-radius: calc(var(--radius) + 2px) !important;
   box-shadow: var(--shadow) !important;
-  backdrop-filter: blur(14px);
+  backdrop-filter: none;
   padding: 14px 18px 12px !important;
   display: flex !important;
   flex-direction: column;
@@ -2081,7 +2081,8 @@ tr.info td:nth-child(6) {
 
 .mc-fullscreen .mc-plot-row {
   flex: 0 0 auto;
-  grid-template-columns: minmax(0, 1.9fr) minmax(400px, 1.35fr) minmax(360px, 1.15fr);
+  grid-template-columns: minmax(520px, 2.7fr) minmax(360px, 1.45fr) minmax(340px, 1.2fr);
+  gap: 18px;
   min-height: clamp(360px, 52vh, 680px);
   max-height: clamp(360px, 58vh, 720px);
 }
@@ -2132,7 +2133,7 @@ body.mc-fullscreen-active {
   overflow: hidden;
 }
 
-@media (max-width: 1320px) {
+@media (max-width: 1500px) {
   .mc-plot-row {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-areas:
@@ -2296,6 +2297,547 @@ body.mc-fullscreen-active {
   color: var(--accent);
   margin-bottom: 10px;
   font-family: var(--font-mono);
+}
+
+/* ── PMM visual refresh ───────────────────────────────────────────────────── */
+
+:root[data-theme="light"] body.pmm-app {
+  --pmm-page-grid-opacity: 0.14;
+  --pmm-hero-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 248, 252, 0.94));
+  --pmm-hero-border: rgba(16, 34, 52, 0.14);
+  --pmm-panel-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 249, 252, 0.96));
+  --pmm-panel-border: rgba(16, 34, 52, 0.14);
+  --pmm-quiet-surface: rgba(245, 248, 252, 0.94);
+  --pmm-quiet-surface-2: rgba(249, 251, 253, 0.98);
+  --pmm-control-bg: rgba(250, 252, 254, 0.98);
+  --pmm-control-border: rgba(16, 34, 52, 0.16);
+  --pmm-control-border-strong: rgba(16, 34, 52, 0.24);
+  --pmm-focus-ring: rgba(12, 137, 181, 0.18);
+  --pmm-console-bg: rgba(247, 250, 253, 0.95);
+  --pmm-guide-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 253, 0.96));
+  --pmm-mc-panel-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.985), rgba(244, 248, 252, 0.98));
+  --pmm-mc-head-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 253, 0.9));
+  --pmm-mc-scrim: rgba(233, 239, 246, 0.82);
+}
+
+:root[data-theme="dark"] body.pmm-app {
+  --pmm-page-grid-opacity: 0.24;
+  --pmm-hero-bg: linear-gradient(180deg, rgba(13, 19, 27, 0.9), rgba(10, 15, 22, 0.82));
+  --pmm-hero-border: rgba(233, 238, 245, 0.12);
+  --pmm-panel-bg: linear-gradient(180deg, rgba(14, 20, 28, 0.95), rgba(16, 23, 32, 0.94));
+  --pmm-panel-border: rgba(233, 238, 245, 0.12);
+  --pmm-quiet-surface: rgba(13, 18, 26, 0.9);
+  --pmm-quiet-surface-2: rgba(16, 23, 32, 0.94);
+  --pmm-control-bg: rgba(9, 13, 20, 0.76);
+  --pmm-control-border: rgba(233, 238, 245, 0.16);
+  --pmm-control-border-strong: rgba(233, 238, 245, 0.24);
+  --pmm-focus-ring: rgba(91, 231, 255, 0.18);
+  --pmm-console-bg: rgba(13, 19, 27, 0.88);
+  --pmm-guide-bg: linear-gradient(180deg, rgba(14, 20, 28, 0.96), rgba(15, 22, 31, 0.94));
+  --pmm-mc-panel-bg: linear-gradient(180deg, rgba(9, 14, 21, 0.98), rgba(12, 18, 26, 0.98));
+  --pmm-mc-head-bg: linear-gradient(180deg, rgba(9, 14, 21, 0.98), rgba(10, 16, 23, 0.86));
+  --pmm-mc-scrim: rgba(4, 8, 12, 0.64);
+}
+
+body.pmm-app::before {
+  opacity: var(--pmm-page-grid-opacity, 0.26);
+}
+
+body.pmm-app .hero {
+  background: var(--pmm-hero-bg);
+  border-color: var(--pmm-hero-border);
+  box-shadow: 0 14px 36px color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+body.pmm-app .panel {
+  background: var(--pmm-panel-bg);
+  border-color: var(--pmm-panel-border);
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+body.pmm-app .status-console,
+body.pmm-app .section-preview-card,
+body.pmm-app .expected-strength-panel,
+body.pmm-app .load-sheet-wrap,
+body.pmm-app .slice-panel {
+  background: var(--pmm-console-bg);
+  border-color: color-mix(in srgb, var(--pmm-panel-border) 92%, transparent);
+}
+
+body.pmm-app .guide-accordion {
+  background: var(--pmm-guide-bg);
+  border-color: color-mix(in srgb, var(--pmm-panel-border) 92%, transparent);
+}
+
+body.pmm-app .guide-card {
+  background: color-mix(in srgb, var(--pmm-quiet-surface) 92%, transparent);
+  border-color: color-mix(in srgb, var(--pmm-panel-border) 92%, transparent);
+}
+
+body.pmm-app .input-group {
+  position: relative;
+  overflow: hidden;
+  padding-top: 14px;
+  background: var(--pmm-quiet-surface);
+  border-color: color-mix(in srgb, var(--pmm-panel-border) 96%, transparent);
+}
+
+body.pmm-app .input-group::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 12px;
+  right: 12px;
+  height: 3px;
+  border-radius: 0 0 999px 999px;
+  background: var(--pmm-group-accent, color-mix(in srgb, var(--line-strong) 78%, transparent));
+}
+
+body.pmm-app .input-group--design {
+  --pmm-group-accent: color-mix(in srgb, var(--accent) 74%, transparent);
+}
+
+body.pmm-app .input-group--section {
+  --pmm-group-accent: color-mix(in srgb, var(--accent-2) 74%, transparent);
+}
+
+body.pmm-app .input-group--analysis {
+  --pmm-group-accent: color-mix(in srgb, var(--accent) 52%, var(--accent-2) 8%);
+  background: var(--pmm-quiet-surface-2);
+  border-color: color-mix(in srgb, var(--pmm-panel-border) 96%, transparent);
+}
+
+body.pmm-app .input-group--loads {
+  --pmm-group-accent: color-mix(in srgb, var(--accent) 30%, var(--accent-2) 46%);
+  background: var(--pmm-quiet-surface-2);
+  border-color: color-mix(in srgb, var(--pmm-panel-border) 96%, transparent);
+}
+
+body.pmm-app label {
+  color: color-mix(in srgb, var(--text) 84%, transparent);
+}
+
+body.pmm-app input,
+body.pmm-app select,
+body.pmm-app textarea {
+  background: var(--pmm-control-bg);
+  border-color: var(--pmm-control-border);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+body.pmm-app input:hover,
+body.pmm-app select:hover,
+body.pmm-app textarea:hover {
+  border-color: var(--pmm-control-border-strong);
+}
+
+body.pmm-app input:focus,
+body.pmm-app select:focus,
+body.pmm-app textarea:focus {
+  border-color: color-mix(in srgb, var(--accent) 72%, var(--pmm-control-border-strong));
+  box-shadow:
+    0 0 0 4px var(--pmm-focus-ring),
+    inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+body.pmm-app .hero-ctrl-btn,
+body.pmm-app .action-btn,
+body.pmm-app .action-btn-lite,
+body.pmm-app .mc-close-btn {
+  border-color: color-mix(in srgb, var(--pmm-control-border-strong) 96%, transparent);
+  background: color-mix(in srgb, var(--pmm-quiet-surface) 92%, transparent);
+}
+
+body.pmm-app .run-btn,
+body.pmm-app #run-btn,
+body.pmm-app #mc-run-btn {
+  border-color: color-mix(in srgb, var(--accent) 78%, var(--pmm-control-border-strong));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 24%, var(--panel)),
+    color-mix(in srgb, var(--accent) 10%, var(--panel-2))
+  );
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+body.pmm-app .run-btn:hover:not(:disabled),
+body.pmm-app #run-btn:hover:not(:disabled),
+body.pmm-app #mc-run-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 92%, var(--pmm-control-border-strong));
+  box-shadow: 0 16px 34px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+body.pmm-app .section-strip-card {
+  border-color: color-mix(in srgb, var(--pmm-panel-border) 94%, transparent);
+  background: color-mix(in srgb, var(--pmm-quiet-surface) 96%, transparent);
+  box-shadow: none;
+}
+
+body.pmm-app .section-strip-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--pmm-control-border-strong));
+  background: color-mix(in srgb, var(--accent) 4%, var(--pmm-quiet-surface));
+}
+
+body.pmm-app .section-strip-card.active {
+  border-color: color-mix(in srgb, var(--accent) 82%, var(--pmm-control-border-strong));
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+body.pmm-app .status-console {
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent);
+}
+
+body.pmm-app .status-chip {
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border-color: color-mix(in srgb, var(--pmm-panel-border) 96%, transparent);
+}
+
+body.pmm-app .status-log li {
+  border-left-color: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+body.pmm-app .mc-intro {
+  max-width: 74ch;
+  opacity: 0.74;
+}
+
+body.pmm-app .mc-controls {
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+body.pmm-app .mc-controls label span,
+body.pmm-app .mc-angle-hint {
+  opacity: 0.66;
+}
+
+body.pmm-app .mc-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.85fr) minmax(260px, 0.72fr) minmax(320px, 0.9fr);
+  gap: 16px;
+  align-items: start;
+}
+
+body.pmm-app .mc-main-stage,
+body.pmm-app .mc-side-card {
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--pmm-panel-border) 96%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--pmm-quiet-surface) 96%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent);
+}
+
+body.pmm-app .mc-main-stage {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  grid-column: 1;
+}
+
+body.pmm-app .mc-meta-stack {
+  display: grid;
+  gap: 10px;
+}
+
+body.pmm-app .mc-side-card {
+  display: flex;
+  min-height: 0;
+  padding: 10px;
+  overflow: hidden;
+}
+
+body.pmm-app .mc-side-card--strain {
+  grid-column: 2;
+  align-self: start;
+}
+
+body.pmm-app .mc-side-card--table {
+  grid-column: 3;
+  min-height: 0;
+}
+
+body.pmm-app .mc-table-shell {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+body.pmm-app .plot-mc,
+body.pmm-app .plot-mc-strain,
+body.pmm-app .mc-data-table {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--pmm-panel-border) 96%, transparent);
+  border-radius: 12px;
+  background: var(--plot-bg);
+  overflow: hidden;
+}
+
+body.pmm-app .plot-mc {
+  height: clamp(360px, 44vh, 520px);
+  margin-bottom: 0;
+}
+
+body.pmm-app .plot-mc-strain,
+body.pmm-app .mc-side-card--strain .plot-mc-strain {
+  flex: 1 1 auto;
+  height: clamp(250px, 29vh, 340px);
+  min-height: 250px;
+}
+
+body.pmm-app .mc-data-table,
+body.pmm-app .mc-side-card--table .mc-data-table {
+  flex: 1 1 auto;
+  height: 100%;
+  max-height: clamp(260px, 34vh, 380px);
+  overflow-y: auto;
+  overflow-x: auto;
+  scrollbar-gutter: stable both-edges;
+}
+
+body.pmm-app .mc-tbl thead {
+  background: var(--plot-head-bg);
+  top: 33px;
+  z-index: 2;
+}
+
+body.pmm-app .mc-table-meta {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 8px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--pmm-panel-border) 96%, transparent);
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+body.pmm-app .mc-tbl tbody tr.active td {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+body.pmm-app .mc-stats {
+  display: block;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+  border-color: color-mix(in srgb, var(--pmm-panel-border) 96%, transparent);
+}
+
+body.pmm-app .mc-stats-grid {
+  gap: 6px 18px;
+}
+
+body.pmm-app .mc-stats-counts {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+body.pmm-app .mc-hover-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--pmm-quiet-surface));
+  border: 1px solid color-mix(in srgb, var(--pmm-panel-border) 96%, transparent);
+  border-radius: 12px;
+}
+
+body.pmm-app .mc-hi-label {
+  font-size: 11px;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+body.pmm-app .mc-hi-val {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+body.pmm-app .mc-actions {
+  margin-top: 12px;
+}
+
+body.pmm-app .mc-fullscreen .mc-intro {
+  margin-bottom: 10px;
+  max-width: 66ch;
+  font-size: 0.88rem;
+}
+
+body.pmm-app .mc-fullscreen .mc-controls {
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+body.pmm-app .mc-fullscreen .mc-angle-hint {
+  margin: 0 0 10px;
+}
+
+body.pmm-app.mc-fullscreen-active::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9990;
+  pointer-events: none;
+  background: var(--pmm-mc-scrim);
+  backdrop-filter: blur(10px);
+}
+
+body.pmm-app .mc-fullscreen {
+  background: var(--pmm-mc-panel-bg) !important;
+  border-color: color-mix(in srgb, var(--pmm-control-border-strong) 92%, transparent);
+  box-shadow: 0 26px 90px color-mix(in srgb, var(--text) 24%, transparent) !important;
+  padding: 16px 18px 14px !important;
+}
+
+body.pmm-app .mc-fullscreen .accordion-head {
+  background: var(--pmm-mc-head-bg);
+  padding: 2px 54px 8px 2px;
+}
+
+body.pmm-app .mc-fullscreen .accordion-body {
+  gap: 8px;
+  padding-right: 10px;
+  padding-bottom: 8px;
+}
+
+body.pmm-app .mc-fullscreen .mc-workspace {
+  grid-template-columns: minmax(0, 2.6fr) minmax(290px, 0.78fr) minmax(340px, 0.98fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+body.pmm-app .mc-fullscreen .plot-mc {
+  min-height: 0;
+}
+
+body.pmm-app .mc-fullscreen .mc-main-stage,
+body.pmm-app .mc-fullscreen .mc-side-card--strain,
+body.pmm-app .mc-fullscreen .mc-side-card--table {
+  min-height: 0;
+}
+
+body.pmm-app .mc-fullscreen .mc-side-card--strain {
+  align-self: stretch;
+}
+
+body.pmm-app .mc-fullscreen .plot-mc-strain,
+body.pmm-app .mc-fullscreen .mc-data-table {
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+}
+
+body.pmm-app .mc-fullscreen .mc-side-card--table .mc-data-table {
+  min-height: 0;
+  overflow-y: scroll;
+}
+
+body.pmm-app .mc-fullscreen .mc-stats,
+body.pmm-app .mc-fullscreen .mc-hover-info {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+body.pmm-app .mc-fullscreen .mc-stats {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+body.pmm-app .mc-fullscreen .mc-stats-meta,
+body.pmm-app .mc-fullscreen .mc-stats-counts {
+  margin-bottom: 6px;
+  font-size: 11px;
+}
+
+body.pmm-app .mc-fullscreen .mc-stats-grid {
+  gap: 4px 16px;
+  font-size: 0.82rem;
+}
+
+body.pmm-app .mc-fullscreen .mc-intro {
+  margin-bottom: 8px;
+  line-height: 1.35;
+}
+
+body.pmm-app .mc-fullscreen .mc-controls {
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+body.pmm-app .mc-fullscreen .mc-angle-hint {
+  margin: 0 0 8px;
+  font-size: 0.76rem;
+}
+
+@media (max-width: 1500px) {
+  body.pmm-app .mc-workspace {
+    grid-template-columns: minmax(0, 1.5fr) minmax(250px, 0.7fr) minmax(300px, 0.9fr);
+  }
+}
+
+@media (max-width: 1180px) {
+  body.pmm-app .mc-workspace,
+  body.pmm-app .mc-fullscreen .mc-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  body.pmm-app .mc-main-stage,
+  body.pmm-app .mc-side-card--strain,
+  body.pmm-app .mc-side-card--table,
+  body.pmm-app .mc-fullscreen .mc-side-card--strain,
+  body.pmm-app .mc-fullscreen .mc-side-card--table {
+    grid-column: auto;
+    height: auto;
+  }
+
+  body.pmm-app .mc-data-table,
+  body.pmm-app .mc-fullscreen .mc-data-table {
+    max-height: 320px;
+    height: 320px;
+  }
+}
+
+@media (max-width: 780px) {
+  body.pmm-app .mc-main-stage,
+  body.pmm-app .mc-side-card {
+    padding: 10px;
+  }
+
+  body.pmm-app .plot-mc {
+    height: 320px;
+  }
+
+  body.pmm-app .plot-mc-strain,
+  body.pmm-app .mc-data-table,
+  body.pmm-app .mc-fullscreen .plot-mc-strain,
+  body.pmm-app .mc-fullscreen .mc-data-table {
+    height: 280px;
+    min-height: 280px;
+    max-height: 280px;
+  }
+
+  body.pmm-app .mc-hover-info {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  body.pmm-app .mc-fullscreen {
+    inset: 10px !important;
+    padding: 14px !important;
+  }
+
+  body.pmm-app .mc-fullscreen .accordion-head {
+    padding-right: 42px;
+  }
 }
 
 .tgua-cls-info-list {

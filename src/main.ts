@@ -1034,23 +1034,33 @@ L3,650,90,45</textarea>
               </label>
               <label>
                 <span data-i18n="labelMcSteps">Adım sayısı</span>
-                <input id="mc-steps" type="number" value="80" min="20" max="400" step="10" />
+                <input id="mc-steps" type="number" value="80" min="20" max="2000" step="10" />
               </label>
               <button id="mc-run-btn" class="run-btn" data-i18n="btnMcRun">M–φ Hesapla</button>
             </div>
             <p class="mc-angle-hint" data-i18n="mcAngleHint">
               0° = Mx eğilmesi (yatay nötr eksen) · 90° = My eğilmesi (düşey nötr eksen)
             </p>
-            <div class="mc-plot-row">
-              <div id="plot-mc" class="plot-mc"></div>
-              <div id="plot-mc-strain" class="plot-mc-strain"></div>
-              <div id="mc-data-table" class="mc-data-table"></div>
-            </div>
-            <div id="mc-stats" class="mc-stats hidden"></div>
-            <div id="mc-hover-info" class="mc-hover-info hidden">
-              <span class="mc-hi-label">Concrete Strain:</span><span id="mc-hi-epsc" class="mc-hi-val">—</span>
-              <span class="mc-hi-label">Steel Strain:</span><span id="mc-hi-epss" class="mc-hi-val">—</span>
-              <span class="mc-hi-label">Neutral Axis:</span><span id="mc-hi-na" class="mc-hi-val">—</span>
+            <div class="mc-workspace">
+              <section class="mc-main-stage">
+                <div id="plot-mc" class="plot-mc"></div>
+                <div class="mc-meta-stack">
+                  <div id="mc-stats" class="mc-stats hidden"></div>
+                  <div id="mc-hover-info" class="mc-hover-info hidden">
+                    <span class="mc-hi-label">Concrete Strain:</span><span id="mc-hi-epsc" class="mc-hi-val">—</span>
+                    <span class="mc-hi-label">Steel Strain:</span><span id="mc-hi-epss" class="mc-hi-val">—</span>
+                    <span class="mc-hi-label">Neutral Axis:</span><span id="mc-hi-na" class="mc-hi-val">—</span>
+                  </div>
+                </div>
+              </section>
+              <section class="mc-side-card mc-side-card--strain">
+                <div id="plot-mc-strain" class="plot-mc-strain"></div>
+              </section>
+              <section class="mc-side-card mc-side-card--table">
+                <div class="mc-table-shell">
+                  <div id="mc-data-table" class="mc-data-table"></div>
+                </div>
+              </section>
             </div>
             <div class="mc-actions">
               <button type="button" id="mc-export-btn" class="action-btn" data-i18n="btnMcExport">Excel (CSV)</button>
@@ -1281,6 +1291,8 @@ interface McData {
   neutralAxis: number[];
   epsC: number[];
   epsS: number[];
+  requestedSteps: number;
+  solvedSteps: number;
 }
 
 const state: {
@@ -2003,10 +2015,6 @@ function applyTheme(theme: ThemeMode): void {
   if (state.mcData) renderMcPlot(state.mcData);
 }
 
-init().catch((error) => {
-  setStatus(state.lang === "en" ? `Error: ${String(error)}` : `Hata: ${String(error)}`, "danger");
-});
-
 async function init(): Promise<void> {
   state.loadSheet = DEFAULT_LOAD_SHEET.map((row) => ({ ...row }));
   state.loadSelectionAnchor = { row: 0, col: "name" };
@@ -2234,6 +2242,7 @@ async function init(): Promise<void> {
       closeMcFullscreen();
     }
   });
+  bindMcResizeObserver();
   window.addEventListener("resize", () => {
     resizeMcPlotsDeferred(140);
     resizeMcPlotsDeferred(320);
@@ -5652,7 +5661,6 @@ function computeMcDataAtAngle(
   const tempNA: number[] = [];
   const tempEpsC: number[] = [];
   const tempEpsS: number[] = [];
-  let peakMoment = 0;
   for (let i = 0; i < count; i++) {
     const m = wasm.getMcMoment(i);
     tempPhi.push(wasm.getMcPhi(i));
@@ -5660,48 +5668,31 @@ function computeMcDataAtAngle(
     tempNA.push(wasm.getMcNeutralAxis(i));
     tempEpsC.push(wasm.getMcEpsC(i));
     tempEpsS.push(wasm.getMcEpsS(i));
-    if (m > peakMoment) peakMoment = m;
   }
-
-  const epsCuLimit = input.epsCu > 0 ? input.epsCu : 0.003;
-  const epsCuCutoff = epsCuLimit * 2.5;
-  let lastConcreteIdx = count - 1;
-  for (let i = 0; i < count; i++) {
-    if (tempEpsC[i] > epsCuCutoff) {
-      lastConcreteIdx = Math.min(count - 1, i + 10);
-      break;
-    }
-  }
-
-  const minAllowedMoment = peakMoment > 0 ? peakMoment * 0.5 : 0;
-  let peakFound = false;
 
   const phi: number[] = [];
   const moment: number[] = [];
   const neutralAxis: number[] = [];
   const epsC: number[] = [];
   const epsS: number[] = [];
-  const endIdx = Math.min(count, lastConcreteIdx + 1);
-  for (let i = 0; i < endIdx; i++) {
+  for (let i = 0; i < count; i++) {
     const m = tempMom[i];
     phi.push(tempPhi[i]);
     moment.push(m);
     neutralAxis.push(tempNA[i]);
     epsC.push(tempEpsC[i]);
     epsS.push(tempEpsS[i]);
-    if (m >= peakMoment * 0.99) peakFound = true;
-    if (peakFound && m < minAllowedMoment) break;
   }
 
-  if (phi.length > 0 && (phi[0] > 1e-12 || moment[0] > 1e-9)) {
-    phi.unshift(0);
-    moment.unshift(0);
-    neutralAxis.unshift(neutralAxis[0]);
-    epsC.unshift(0);
-    epsS.unshift(0);
-  }
-
-  return { phi, moment, neutralAxis, epsC, epsS };
+  return {
+    phi,
+    moment,
+    neutralAxis,
+    epsC,
+    epsS,
+    requestedSteps: nSteps,
+    solvedSteps: count,
+  };
 }
 
 async function runMomentCurvature(): Promise<void> {
@@ -5717,7 +5708,7 @@ async function runMomentCurvature(): Promise<void> {
   const pKnRaw = Number(refs.mcP.value.trim().replace(",", "."));
   if (!Number.isFinite(pKnRaw)) throw new Error(tx("statusMcNoPmm"));
   const angleDeg = Number(refs.mcAngle.value.trim().replace(",", ".")) || 0;
-  const nSteps = Math.max(20, Math.min(400, Math.round(Number(refs.mcSteps.value) || 80)));
+  const nSteps = Math.max(20, Math.min(2000, Math.round(Number(refs.mcSteps.value) || 80)));
   state.mcData = computeMcDataAtAngle(wasm, input, pKnRaw, angleDeg, nSteps, pSignFactor);
   renderMcPlot(state.mcData);
   setStatus(tx("statusMcDone"), "info");
@@ -5775,12 +5766,14 @@ function renderMcPlot(data: McData): void {
   // Format phi in units of 1/m (no conversion needed — already rad/m)
   const keyPts = computeMcKeyPoints(phi, moment);
 
-  const sceneBg = state.theme === "light" ? "#f7fbff" : "#06111a";
-  const lineColor = state.theme === "light" ? "#1a858e" : "#5be7ff";
+  const sceneBg = state.theme === "light" ? "#fbfdff" : "#0a1117";
+  const lineColor = state.theme === "light" ? "#0f7f93" : "#5be7ff";
   const peakColor = state.theme === "light" ? "#d84b4b" : "#ff7f7f";
   const yieldColor = state.theme === "light" ? "#1f9d55" : "#8ff7a7";
-  const gridColor = state.theme === "light" ? "rgba(41,74,88,0.18)" : "rgba(159,197,202,0.18)";
-  const textColor = state.theme === "light" ? "#17323d" : "#cde6eb";
+  const gridColor = state.theme === "light" ? "rgba(29,58,74,0.12)" : "rgba(159,197,202,0.16)";
+  const textColor = state.theme === "light" ? "#17323d" : "#d3e7eb";
+  const legendBg = state.theme === "light" ? "rgba(255,255,255,0.84)" : "rgba(7,13,19,0.78)";
+  const isFullscreen = !!document.getElementById("mc-accordion")?.classList.contains("mc-fullscreen");
 
   const phiLabel = state.lang === "en" ? "φ (1/m)" : "φ (1/m)";
   const mLabel = state.lang === "en" ? "M (kNm)" : "M (kNm)";
@@ -5832,12 +5825,27 @@ function renderMcPlot(data: McData): void {
     hovertemplate: `φy: %{x:.5f}<br>M(İdealize): %{y:.1f} kNm<extra></extra>`,
   };
 
+  const activeIdx = phi.length > 0 ? phi.length - 1 : 0;
+  const activeTrace = {
+    type: "scatter",
+    mode: "markers",
+    x: phi.length > 0 ? [phi[activeIdx]] : [],
+    y: moment.length > 0 ? [moment[activeIdx]] : [],
+    showlegend: false,
+    hoverinfo: "skip",
+    marker: {
+      color: "#f2c94c",
+      size: 12,
+      line: { color: state.theme === "light" ? "#8d6b00" : "#fff3bf", width: 2 },
+    },
+  };
+
   const layout = {
     autosize: true,
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: sceneBg,
     height: mcPlotHeightPx(),
-    margin: { l: 72, r: 28, t: 32, b: 64 },
+    margin: { l: 64, r: 18, t: 18, b: isFullscreen ? 46 : 34 },
     xaxis: {
       title: { text: phiLabel, font: { color: textColor } },
       color: textColor,
@@ -5852,7 +5860,14 @@ function renderMcPlot(data: McData): void {
     },
     legend: {
       font: { color: textColor, size: 11 },
-      bgcolor: "rgba(0,0,0,0)",
+      bgcolor: legendBg,
+      bordercolor: gridColor,
+      borderwidth: 1,
+      orientation: "v" as const,
+      x: 0.985,
+      xanchor: "right" as const,
+      y: 0.985,
+      yanchor: "top" as const,
     },
     font: { color: textColor },
   };
@@ -5860,26 +5875,25 @@ function renderMcPlot(data: McData): void {
   const config = { responsive: true, displaylogo: false, scrollZoom: false };
 
   try {
-    (Plotly as any).react(host, [curveTrace, bilinearTrace, peakTrace, yieldTrace], layout, config);
+    (Plotly as any).react(host, [curveTrace, bilinearTrace, peakTrace, yieldTrace, activeTrace], layout, config);
 
     // Hover sync: update strain diagram on hover
     // Hover sync: update strain diagram on hover
+    (host as any).removeAllListeners?.("plotly_hover");
     (host as any).on("plotly_hover", (ev: any) => {
       if (!ev || !ev.points || ev.points.length === 0) return;
       const pt = ev.points[0];
       if (pt.curveNumber !== 0) return; // only on main curve
       const idx = pt.pointIndex as number;
       if (state.mcData) {
-        updateMcHoverInfo(state.mcData, idx);
-        renderStrainDiagram(state.mcData, idx);
+        selectMcPoint(state.mcData, idx);
       }
     });
 
     // Render strain diagram for last point by default
     if (data.phi.length > 0) {
       const lastIdx = data.phi.length - 1;
-      updateMcHoverInfo(data, lastIdx);
-      renderStrainDiagram(data, lastIdx);
+      selectMcPoint(data, lastIdx);
     }
   } catch (e) {
     host.textContent = String(e);
@@ -5892,9 +5906,13 @@ function renderMcPlot(data: McData): void {
   const pLabel = state.lang === "en"
     ? `P = ${fmt(pUser, 1)} kN (WASM convention), angle = ${fmt(angleDeg, 1)}°`
     : `P = ${fmt(pUser, 1)} kN (WASM yönü), açı = ${fmt(angleDeg, 1)}°`;
+  const countLabel = state.lang === "en"
+    ? `Requested steps: ${data.requestedSteps} · Valid solutions: ${data.solvedSteps} · Shown points: ${data.phi.length}`
+    : `İstenen adım: ${data.requestedSteps} · Geçerli çözüm: ${data.solvedSteps} · Gösterilen nokta: ${data.phi.length}`;
 
   statsDiv.innerHTML = `
     <p class="mc-stats-meta">${escapeHtml(pLabel)}</p>
+    <p class="mc-stats-counts">${escapeHtml(countLabel)}</p>
     <div class="mc-stats-grid">
       <span class="mc-stat-label">${tx("mcStatsMu")}</span><span class="mc-stat-value">${fmt(keyPts.mu, 1)} kNm</span>
       <span class="mc-stat-label">${tx("mcStatsPhiU")}</span><span class="mc-stat-value">${keyPts.phiU.toExponential(4)} 1/m</span>
@@ -5905,14 +5923,19 @@ function renderMcPlot(data: McData): void {
   statsDiv.classList.remove("hidden");
 
   // Render data table
-  renderMcDataTable(data);
+  const defaultIdx = data.phi.length > 0 ? data.phi.length - 1 : -1;
+  renderMcDataTable(data, defaultIdx);
+  resizeMcPlotsDeferred(0);
 }
 
-function renderMcDataTable(data: McData): void {
+function renderMcDataTable(data: McData, activeIdx = -1): void {
   const container = refs.mcDataTable;
   if (!container) return;
+  const metaText = state.lang === "en"
+    ? `${data.solvedSteps} / ${data.requestedSteps} valid solution points`
+    : `${data.solvedSteps} / ${data.requestedSteps} çözüm noktası`;
   const rows = data.phi.map((phi, i) =>
-    `<tr>
+    `<tr data-mc-row="${i}" class="${i === activeIdx ? "active" : ""}">
       <td>${i + 1}</td>
       <td>${phi.toExponential(3)}</td>
       <td>${data.moment[i].toFixed(1)}</td>
@@ -5922,6 +5945,7 @@ function renderMcDataTable(data: McData): void {
     </tr>`
   ).join("");
   container.innerHTML = `
+    <div class="mc-table-meta">${escapeHtml(metaText)}</div>
     <table class="mc-tbl">
       <thead>
         <tr>
@@ -5935,6 +5959,46 @@ function renderMcDataTable(data: McData): void {
       </thead>
       <tbody>${rows}</tbody>
     </table>`;
+
+  const rowEls = Array.from(container.querySelectorAll<HTMLTableRowElement>("tbody tr[data-mc-row]"));
+  for (const row of rowEls) {
+    const idx = Number(row.dataset.mcRow ?? "-1");
+    if (!Number.isFinite(idx) || idx < 0) continue;
+    row.addEventListener("mouseenter", () => {
+      if (state.mcData) selectMcPoint(state.mcData, idx);
+    });
+    row.addEventListener("click", () => {
+      if (state.mcData) selectMcPoint(state.mcData, idx);
+    });
+  }
+}
+
+function syncMcTableHighlight(idx: number): void {
+  const prev = refs.mcDataTable.querySelector<HTMLTableRowElement>("tbody tr.active");
+  if (prev) prev.classList.remove("active");
+  const next = refs.mcDataTable.querySelector<HTMLTableRowElement>(`tbody tr[data-mc-row="${idx}"]`);
+  if (!next) return;
+  next.classList.add("active");
+  next.scrollIntoView({ block: "nearest" });
+}
+
+function updateMcCurveHighlight(data: McData, idx: number): void {
+  if (idx < 0 || idx >= data.phi.length) return;
+  try {
+    (Plotly as any).restyle(refs.plotMc, {
+      x: [[data.phi[idx]]],
+      y: [[data.moment[idx]]],
+    }, [4]);
+  } catch {
+    // Plot may not be ready during early transitions.
+  }
+}
+
+function selectMcPoint(data: McData, idx: number): void {
+  if (idx < 0 || idx >= data.phi.length) return;
+  updateMcHoverInfo(data, idx);
+  updateMcCurveHighlight(data, idx);
+  renderStrainDiagram(data, idx);
 }
 
 function collectReportMeta(): ReportMeta {
@@ -7095,15 +7159,32 @@ function escapeHtml(v: string): string {
   });
 }
 
+document.body.classList.add("pmm-app");
+
 let mcResizeToken = 0;
+let mcResizeObserver: ResizeObserver | null = null;
+
+function mcFullscreenStageHeightPx(): number {
+  const vh = window.innerHeight || 900;
+  return clamp(Math.round(vh * 0.54), 380, 640);
+}
 
 function mcPlotHeightPx(): number {
   const acc = document.getElementById("mc-accordion");
   const isFullscreen = !!acc?.classList.contains("mc-fullscreen");
   const vh = window.innerHeight || 900;
   return isFullscreen
-    ? clamp(Math.round(vh * 0.58), 360, 720)
-    : clamp(Math.round(vh * 0.34), 320, 460);
+    ? Math.max(320, mcFullscreenStageHeightPx() - 130)
+    : clamp(Math.round(vh * 0.4), 340, 520);
+}
+
+function mcStrainHeightPx(): number {
+  const acc = document.getElementById("mc-accordion");
+  const isFullscreen = !!acc?.classList.contains("mc-fullscreen");
+  const vh = window.innerHeight || 900;
+  return isFullscreen
+    ? Math.max(320, mcFullscreenStageHeightPx() - 18)
+    : clamp(Math.round(vh * 0.28), 250, 340);
 }
 
 function updateMcFullscreenButtonLabel(): void {
@@ -7112,22 +7193,80 @@ function updateMcFullscreenButtonLabel(): void {
   refs.mcFullscreenBtn.textContent = expanded ? tx("btnMcCollapse") : tx("btnMcFullscreen");
 }
 
+function bindMcResizeObserver(): void {
+  if (mcResizeObserver) {
+    mcResizeObserver.disconnect();
+    mcResizeObserver = null;
+  }
+  if (typeof ResizeObserver === "undefined") return;
+
+  const acc = document.getElementById("mc-accordion");
+  const body = acc?.querySelector<HTMLElement>(".accordion-body");
+  const workspace = acc?.querySelector<HTMLElement>(".mc-workspace");
+  const mainStage = acc?.querySelector<HTMLElement>(".mc-main-stage");
+  const strainStage = acc?.querySelector<HTMLElement>(".mc-side-card--strain");
+  const tableStage = acc?.querySelector<HTMLElement>(".mc-side-card--table");
+  const observed = [acc, body, workspace, mainStage, strainStage, tableStage].filter((el): el is HTMLElement => !!el);
+  if (observed.length === 0) return;
+
+  mcResizeObserver = new ResizeObserver(() => {
+    resizeMcPlotsDeferred(16);
+    resizeMcPlotsDeferred(90);
+  });
+
+  for (const el of observed) {
+    mcResizeObserver.observe(el);
+  }
+}
+
 function resizeMcPlotsDeferred(delayMs = 80): void {
   if (!state.mcData || state.mcData.phi.length === 0) return;
   mcResizeToken += 1;
   const token = mcResizeToken;
   window.setTimeout(() => {
     if (token !== mcResizeToken) return;
-    const targetHeight = mcPlotHeightPx();
+    const acc = document.getElementById("mc-accordion");
+    const isFullscreen = !!acc?.classList.contains("mc-fullscreen");
+    const mainStage = acc?.querySelector<HTMLElement>(".mc-main-stage");
+    const metaStack = acc?.querySelector<HTMLElement>(".mc-meta-stack");
+    const strainStage = acc?.querySelector<HTMLElement>(".mc-side-card--strain");
+    const tableStage = acc?.querySelector<HTMLElement>(".mc-side-card--table");
+    const fullscreenStageHeight = isFullscreen ? mcFullscreenStageHeightPx() : 0;
+
+    if (mainStage) mainStage.style.height = isFullscreen ? `${fullscreenStageHeight}px` : "";
+    if (strainStage) strainStage.style.height = isFullscreen ? `${fullscreenStageHeight}px` : "";
+    if (tableStage) tableStage.style.height = isFullscreen ? `${fullscreenStageHeight}px` : "";
+
+    let curveHeight = mcPlotHeightPx();
+    if (isFullscreen && mainStage) {
+      const metaHeight = metaStack?.offsetHeight ?? 0;
+      curveHeight = Math.max(300, fullscreenStageHeight - metaHeight - 18);
+    }
+
+    let strainHeight = mcStrainHeightPx();
+    if (isFullscreen && strainStage) {
+      strainHeight = Math.max(320, fullscreenStageHeight - 20);
+    }
+
     refs.plotMc.style.width = "100%";
-    refs.plotMc.style.height = `${targetHeight}px`;
+    refs.plotMc.style.height = `${curveHeight}px`;
     refs.plotMcStrain.style.width = "100%";
-    refs.plotMcStrain.style.height = `${targetHeight}px`;
+    refs.plotMcStrain.style.height = `${strainHeight}px`;
     try {
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
-          (Plotly as any).relayout(refs.plotMc, { autosize: true, height: targetHeight });
-          (Plotly as any).relayout(refs.plotMcStrain, { autosize: true, height: targetHeight });
+          const curveWidth = refs.plotMc.clientWidth;
+          const strainWidth = refs.plotMcStrain.clientWidth;
+          (Plotly as any).relayout(refs.plotMc, {
+            autosize: true,
+            width: curveWidth > 0 ? curveWidth : undefined,
+            height: curveHeight,
+          });
+          (Plotly as any).relayout(refs.plotMcStrain, {
+            autosize: true,
+            width: strainWidth > 0 ? strainWidth : undefined,
+            height: strainHeight,
+          });
           (Plotly as any).Plots.resize(refs.plotMc);
           (Plotly as any).Plots.resize(refs.plotMcStrain);
         });
@@ -7210,6 +7349,7 @@ function updateMcHoverInfo(data: McData, idx: number): void {
   refs.mcHiEpsC.textContent = data.epsC[idx].toExponential(4);
   refs.mcHiEpsS.textContent = data.epsS[idx].toExponential(4);
   refs.mcHiNA.textContent = (data.neutralAxis[idx] * 1000).toFixed(1) + " mm";
+  syncMcTableHighlight(idx);
 }
 
 function renderStrainDiagram(data: McData, idx: number): void {
@@ -7237,11 +7377,12 @@ function renderStrainDiagram(data: McData, idx: number): void {
   const yPositions = [0, c_i * 1000, depth * 1000]; // in mm
   const strainValues = [epsC_i, 0, epsBottom];
 
-  const sceneBg = state.theme === "light" ? "#f7fbff" : "#06111a";
+  const sceneBg = state.theme === "light" ? "#fbfdff" : "#0a1117";
   const lineColor = state.theme === "light" ? "#d84b4b" : "#ff7f7f";
-  const naColor = state.theme === "light" ? "#1a858e" : "#5be7ff";
-  const gridColor = state.theme === "light" ? "rgba(41,74,88,0.18)" : "rgba(159,197,202,0.18)";
-  const textColor = state.theme === "light" ? "#17323d" : "#cde6eb";
+  const naColor = state.theme === "light" ? "#0f7f93" : "#5be7ff";
+  const gridColor = state.theme === "light" ? "rgba(29,58,74,0.12)" : "rgba(159,197,202,0.16)";
+  const textColor = state.theme === "light" ? "#17323d" : "#d3e7eb";
+  const legendBg = state.theme === "light" ? "rgba(255,255,255,0.86)" : "rgba(7,13,19,0.78)";
 
   const strainTrace = {
     type: "scatter",
@@ -7276,6 +7417,20 @@ function renderStrainDiagram(data: McData, idx: number): void {
     hoverinfo: "skip",
   };
 
+  const activeTrace = {
+    type: "scatter",
+    mode: "markers",
+    x: [0],
+    y: [c_i * 1000],
+    showlegend: false,
+    hoverinfo: "skip",
+    marker: {
+      color: "#f2c94c",
+      size: 10,
+      line: { color: state.theme === "light" ? "#8d6b00" : "#fff3bf", width: 2 },
+    },
+  };
+
   const yLabel = state.lang === "en" ? "Depth (mm)" : "Derinlik (mm)";
   const xLabel = state.lang === "en" ? "Strain (ε)" : "Birim Uzama (ε)";
 
@@ -7283,37 +7438,39 @@ function renderStrainDiagram(data: McData, idx: number): void {
     autosize: true,
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: sceneBg,
-    height: mcPlotHeightPx(),
-    margin: { l: 60, r: 20, t: 52, b: 92 },
+    height: mcStrainHeightPx(),
+    margin: { l: 52, r: 12, t: 34, b: 54 },
     title: {
       text: state.lang === "en" ? "Strain Diagram" : "Birim Uzama Diyagramı",
-      font: { color: textColor, size: 13 },
+      font: { color: textColor, size: 12 },
       x: 0.5,
       xanchor: "center" as const,
-      y: 0.98,
+      y: 0.97,
       yanchor: "top" as const,
     },
     xaxis: {
-      title: { text: xLabel, font: { color: textColor, size: 11 } },
+      title: { text: xLabel, font: { color: textColor, size: 10 } },
       color: textColor,
       gridcolor: gridColor,
       zerolinecolor: gridColor,
     },
     yaxis: {
-      title: { text: yLabel, font: { color: textColor, size: 11 } },
+      title: { text: yLabel, font: { color: textColor, size: 10 } },
       color: textColor,
       gridcolor: gridColor,
       zerolinecolor: gridColor,
       autorange: "reversed" as const,
     },
     legend: {
-      font: { color: textColor, size: 10 },
-      bgcolor: "rgba(0,0,0,0)",
-      orientation: "h" as const,
-      x: 0.5,
-      xanchor: "center" as const,
-      y: -0.22,
-      yanchor: "top" as const,
+      font: { color: textColor, size: 9 },
+      bgcolor: legendBg,
+      bordercolor: gridColor,
+      borderwidth: 1,
+      orientation: "v" as const,
+      x: 0.98,
+      xanchor: "right" as const,
+      y: 0.02,
+      yanchor: "bottom" as const,
     },
     font: { color: textColor },
     showlegend: true,
@@ -7328,8 +7485,12 @@ function renderStrainDiagram(data: McData, idx: number): void {
   };
 
   try {
-    (Plotly as any).react(host, [zeroTrace, strainTrace, naTrace], layout, config);
+    (Plotly as any).react(host, [zeroTrace, strainTrace, naTrace, activeTrace], layout, config);
   } catch (e) {
     host.textContent = String(e);
   }
 }
+
+init().catch((error) => {
+  setStatus(state.lang === "en" ? `Error: ${String(error)}` : `Hata: ${String(error)}`, "danger");
+});
