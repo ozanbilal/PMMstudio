@@ -665,6 +665,22 @@ h2 {
   background: color-mix(in srgb, var(--accent) 6%, var(--panel-soft));
 }
 
+.section-strip-card:focus-within {
+  outline: 2px solid color-mix(in srgb, var(--accent) 30%, var(--control-focus));
+  outline-offset: 2px;
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--line-strong));
+  box-shadow: 0 0 0 4px var(--control-focus);
+}
+
+.section-strip-hit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+  outline: none;
+}
+
 .section-strip-card.active {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 13%, var(--panel));
@@ -783,6 +799,16 @@ select:focus,
 textarea:focus {
   outline: 2px solid var(--control-focus);
   border-color: color-mix(in srgb, var(--accent) 65%, var(--line));
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 30%, var(--control-focus));
+  outline-offset: 2px;
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--line));
+  box-shadow: 0 0 0 4px var(--control-focus);
 }
 
 textarea {
@@ -1062,6 +1088,15 @@ button:hover:not(:disabled) {
 button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 .rho-line {
@@ -1998,20 +2033,32 @@ tr.info td:nth-child(6) {
 /* Fullscreen mode */
 .mc-fullscreen {
   position: fixed !important;
-  inset: 0 !important;
+  inset: 12px !important;
   z-index: 9999;
-  background: var(--panel) !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  padding: 14px 18px !important;
+  background: color-mix(in srgb, var(--bg) 92%, black 8%) !important;
+  border: 1px solid color-mix(in srgb, var(--line-strong) 88%, transparent);
+  border-radius: calc(var(--radius) + 2px) !important;
+  box-shadow: var(--shadow) !important;
+  backdrop-filter: blur(14px);
+  padding: 14px 18px 12px !important;
   display: flex !important;
   flex-direction: column;
   overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 .mc-fullscreen .accordion-head {
   display: flex !important;
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 2px 42px 10px 2px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg) 96%, transparent),
+    color-mix(in srgb, var(--bg) 84%, transparent)
+  );
 }
 
 /* Hide the Aç/Kapat hint in fullscreen */
@@ -2029,6 +2076,7 @@ tr.info td:nth-child(6) {
   position: relative;
   gap: 10px;
   padding-right: 6px;
+  padding-bottom: 8px;
 }
 
 .mc-fullscreen .mc-plot-row {
@@ -2078,6 +2126,10 @@ tr.info td:nth-child(6) {
     color-mix(in srgb, var(--panel) 35%, transparent),
     color-mix(in srgb, var(--panel) 96%, transparent)
   );
+}
+
+body.mc-fullscreen-active {
+  overflow: hidden;
 }
 
 @media (max-width: 1320px) {

@@ -1962,6 +1962,7 @@ function refreshHeroToggles(): void {
 }
 
 function applyLocale(): void {
+  document.documentElement.lang = state.lang;
   const all = document.querySelectorAll<HTMLElement>("[data-i18n]");
   for (const el of all) {
     const key = el.dataset.i18n as I18nKey | undefined;
@@ -2228,6 +2229,11 @@ async function init(): Promise<void> {
   refs.mcCloseBtn.addEventListener("click", closeMcFullscreen);
   refs.mcCopyBtn.addEventListener("click", () => copyMcData().catch(showError));
   refs.mcExportBtn.addEventListener("click", exportMcDataToCsv);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeMcFullscreen();
+    }
+  });
   window.addEventListener("resize", () => {
     resizeMcPlotsDeferred(140);
     resizeMcPlotsDeferred(320);
@@ -2382,6 +2388,12 @@ function renderSectionStrip(): void {
     card.className = `section-strip-card${isActive ? " active" : ""}`;
     card.dataset.idx = String(i);
 
+    const hitArea = document.createElement("div");
+    hitArea.className = "section-strip-hit";
+    hitArea.tabIndex = 0;
+    hitArea.setAttribute("role", "button");
+    hitArea.setAttribute("aria-pressed", isActive ? "true" : "false");
+
     const nameSpan = document.createElement("span");
     nameSpan.className = "section-strip-name";
     nameSpan.textContent = sec.name;
@@ -2395,8 +2407,8 @@ function renderSectionStrip(): void {
     chevron.className = "section-strip-chevron";
     chevron.textContent = isActive && state.sectionFormExpanded ? "\u25B4" : "\u25BE";
 
-    card.appendChild(nameSpan);
-    card.appendChild(summarySpan);
+    hitArea.appendChild(nameSpan);
+    hitArea.appendChild(summarySpan);
 
     if (state.sections.length > 1) {
       const delBtn = document.createElement("button");
@@ -2410,8 +2422,15 @@ function renderSectionStrip(): void {
       card.appendChild(delBtn);
     }
 
-    card.appendChild(chevron);
-    card.addEventListener("click", () => switchSection(i));
+    hitArea.appendChild(chevron);
+    hitArea.addEventListener("click", () => switchSection(i));
+    hitArea.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        switchSection(i);
+      }
+    });
+    card.appendChild(hitArea);
     container.appendChild(card);
   }
 }
@@ -5814,6 +5833,7 @@ function renderMcPlot(data: McData): void {
   };
 
   const layout = {
+    autosize: true,
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: sceneBg,
     height: mcPlotHeightPx(),
@@ -6435,7 +6455,7 @@ function formatIsoDateForDisplay(value: string): string {
   if (!value) return "-";
   const dt = new Date(`${value}T00:00:00`);
   if (!Number.isFinite(dt.getTime())) return value;
-  return dt.toLocaleDateString("tr-TR", { year: "numeric", month: "2-digit", day: "2-digit" });
+  return dt.toLocaleDateString(currentLocale(), { year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
 async function capturePlotlyImage(host: HTMLElement, width: number, height: number): Promise<string> {
@@ -6653,7 +6673,7 @@ function renderMphiSummaryTable(section: MphiReportSection): string {
 }
 
 function buildReportHtml(snapshot: ReportSnapshot, printMode: boolean): string {
-  const generatedAt = new Date().toLocaleString("tr-TR");
+  const generatedAt = new Date().toLocaleString(currentLocale());
   const sections = snapshot.meta.sections;
   const docTitle = snapshot.meta.documentTitle || "Kolon PMM Teknik Raporu";
   const safeLogo = snapshot.meta.logoDataUrl;
@@ -7019,7 +7039,7 @@ function toFixedPlain(v: number, d: number): string {
 
 function fmtSlice(v: number, d = 1): string {
   if (!Number.isFinite(v)) return "-";
-  return v.toLocaleString("en-US", { maximumFractionDigits: d, minimumFractionDigits: d });
+  return v.toLocaleString(currentLocale(), { maximumFractionDigits: d, minimumFractionDigits: d });
 }
 
 function clamp(v: number, min: number, max: number): number {
@@ -7051,7 +7071,11 @@ function resolveDesignStrengths(input: AppInput): DesignStrengths {
 
 function fmt(v: number, d = 2): string {
   if (!Number.isFinite(v)) return "-";
-  return v.toLocaleString("en-US", { maximumFractionDigits: d, minimumFractionDigits: d });
+  return v.toLocaleString(currentLocale(), { maximumFractionDigits: d, minimumFractionDigits: d });
+}
+
+function currentLocale(): string {
+  return state.lang === "en" ? "en-US" : "tr-TR";
 }
 
 function escapeHtml(v: string): string {
@@ -7095,40 +7119,58 @@ function resizeMcPlotsDeferred(delayMs = 80): void {
   window.setTimeout(() => {
     if (token !== mcResizeToken) return;
     const targetHeight = mcPlotHeightPx();
+    refs.plotMc.style.width = "100%";
+    refs.plotMc.style.height = `${targetHeight}px`;
+    refs.plotMcStrain.style.width = "100%";
+    refs.plotMcStrain.style.height = `${targetHeight}px`;
     try {
-      (Plotly as any).relayout(refs.plotMc, { height: targetHeight });
-      (Plotly as any).relayout(refs.plotMcStrain, { height: targetHeight });
-      (Plotly as any).Plots.resize(refs.plotMc);
-      (Plotly as any).Plots.resize(refs.plotMcStrain);
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          (Plotly as any).relayout(refs.plotMc, { autosize: true, height: targetHeight });
+          (Plotly as any).relayout(refs.plotMcStrain, { autosize: true, height: targetHeight });
+          (Plotly as any).Plots.resize(refs.plotMc);
+          (Plotly as any).Plots.resize(refs.plotMcStrain);
+        });
+      });
     } catch {
       // Plot containers may not be ready yet during early layout transitions.
     }
   }, delayMs);
 }
 
+function setMcFullscreenState(isFullscreen: boolean): void {
+  const acc = document.getElementById("mc-accordion");
+  if (!acc) return;
+  acc.classList.toggle("mc-fullscreen", isFullscreen);
+  refs.mcCloseBtn.classList.toggle("mc-close-visible", isFullscreen);
+  document.body.classList.toggle("mc-fullscreen-active", isFullscreen);
+  updateMcFullscreenButtonLabel();
+}
+
 function toggleMcFullscreen(): void {
   const acc = document.getElementById("mc-accordion");
   if (!acc) return;
   const entering = !acc.classList.contains("mc-fullscreen");
-  acc.classList.toggle("mc-fullscreen", entering);
-  refs.mcCloseBtn.classList.toggle("mc-close-visible", entering);
+  setMcFullscreenState(entering);
   if (entering) {
     const body = acc.querySelector<HTMLElement>(".accordion-body");
     if (body) body.scrollTop = 0;
   }
-  updateMcFullscreenButtonLabel();
+  resizeMcPlotsDeferred(24);
   resizeMcPlotsDeferred(90);
   resizeMcPlotsDeferred(260);
+  resizeMcPlotsDeferred(520);
 }
 
 function closeMcFullscreen(): void {
   const acc = document.getElementById("mc-accordion");
   if (!acc) return;
-  acc.classList.remove("mc-fullscreen");
-  refs.mcCloseBtn.classList.remove("mc-close-visible");
-  updateMcFullscreenButtonLabel();
+  if (!acc.classList.contains("mc-fullscreen")) return;
+  setMcFullscreenState(false);
+  resizeMcPlotsDeferred(24);
   resizeMcPlotsDeferred(90);
   resizeMcPlotsDeferred(260);
+  resizeMcPlotsDeferred(520);
 }
 
 function mcClipboardText(data: McData): string {
@@ -7238,6 +7280,7 @@ function renderStrainDiagram(data: McData, idx: number): void {
   const xLabel = state.lang === "en" ? "Strain (ε)" : "Birim Uzama (ε)";
 
   const layout = {
+    autosize: true,
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: sceneBg,
     height: mcPlotHeightPx(),
