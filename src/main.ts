@@ -8115,7 +8115,7 @@ function renderPlotlyFigure(plotly: any, host: HTMLElement, data: any[], layout:
 
 function purgePlotlyFigure(host: HTMLElement): void {
   try {
-    const currentPlotly = Plotly as any;
+    const currentPlotly = (globalThis as any).Plotly;
     if (currentPlotly?.purge && hasPlotlyFigure(host)) {
       currentPlotly.purge(host);
     }
