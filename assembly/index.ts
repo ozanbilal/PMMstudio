@@ -880,6 +880,16 @@ let mcMomentArr = new Array<f64>();
 let mcNeutralAxisArr = new Array<f64>();
 let mcEpsCArr = new Array<f64>();
 let mcEpsSArr = new Array<f64>();
+let mcMissStartPhiArr = new Array<f64>();
+let mcMissEndPhiArr = new Array<f64>();
+let mcRootNotFoundCount: i32 = 0;
+let mcNearMissAcceptedCount: i32 = 0;
+let mcLastSolveMode: i32 = -1; // -1=fail, 0=bracket/exact, 1=near-miss
+
+function returnMcSolve(value: f64, mode: i32): f64 {
+  mcLastSolveMode = mode;
+  return value;
+}
 
 /**
  * Evaluate net axial force (kN) for a given neutral-axis depth c and
@@ -920,6 +930,7 @@ function bisectCForP(
   esKn: f64,
   barArea: f64
 ): f64 {
+  mcLastSolveMode = -1;
   if (cHi <= cLo) return -1.0;
 
   let fTol = 0.5; // kN
@@ -940,7 +951,7 @@ function bisectCForP(
   let fPrev = evalForceAtPhiC(nx, ny, cPrev, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
   let bestC = cPrev;
   let bestAbs = Math.abs(fPrev);
-  if (bestAbs < fTol) return bestC;
+  if (bestAbs < fTol) return returnMcSolve(bestC, 0);
 
   let hasBracket = false;
   let bracketLo = cLo;
@@ -955,7 +966,7 @@ function bisectCForP(
       bestAbs = absCurr;
       bestC = cCurr;
     }
-    if (absCurr < fTol) return cCurr;
+    if (absCurr < fTol) return returnMcSolve(cCurr, 0);
 
     if (fPrev * fCurr <= 0.0) {
       let cMid = 0.5 * (cPrev + cCurr);
@@ -992,12 +1003,12 @@ function bisectCForP(
       let dLocal = (cB - cA) / <f64>seg;
       let cP = cA;
       let fP = evalForceAtPhiC(nx, ny, cP, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
-      if (Math.abs(fP) < fTol) return cP;
+      if (Math.abs(fP) < fTol) return returnMcSolve(cP, 0);
 
       for (let j = 1; j <= seg; j++) {
         let cQ = cA + <f64>j * dLocal;
         let fQ = evalForceAtPhiC(nx, ny, cQ, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
-        if (Math.abs(fQ) < fTol) return cQ;
+        if (Math.abs(fQ) < fTol) return returnMcSolve(cQ, 0);
         if (fP * fQ <= 0.0) {
           hasBracket = true;
           bracketLo = cP;
@@ -1029,12 +1040,12 @@ function bisectCForP(
       let dLocal = (cB - cA) / <f64>seg;
       let cP = cA;
       let fP = evalForceAtPhiC(nx, ny, cP, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
-      if (Math.abs(fP) < fTol) return cP;
+      if (Math.abs(fP) < fTol) return returnMcSolve(cP, 0);
 
       for (let j = 1; j <= seg; j++) {
         let cQ = cA + <f64>j * dLocal;
         let fQ = evalForceAtPhiC(nx, ny, cQ, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
-        if (Math.abs(fQ) < fTol) return cQ;
+        if (Math.abs(fQ) < fTol) return returnMcSolve(cQ, 0);
         if (fP * fQ <= 0.0) {
           hasBracket = true;
           bracketLo = cP;
@@ -1055,7 +1066,7 @@ function bisectCForP(
     nearTol += relTol;
     let nearTolCap = concreteModel == 0 ? 10.0 : 4.0;
     if (nearTol > nearTolCap) nearTol = nearTolCap;
-    if (bestAbs < nearTol) return bestC;
+    if (bestAbs < nearTol) return returnMcSolve(bestC, 1);
     return -1.0;
   }
 
@@ -1066,7 +1077,7 @@ function bisectCForP(
   for (let iter = 0; iter < 72; iter++) {
     let cMid = 0.5 * (cA + cB);
     let fMid = evalForceAtPhiC(nx, ny, cMid, phi, k1, concStress, fyd, esKn, barArea) - pTarget;
-    if (Math.abs(fMid) < fTol) return cMid;
+    if (Math.abs(fMid) < fTol) return returnMcSolve(cMid, 0);
     if (fA * fMid <= 0.0) {
       cB = cMid;
     } else {
@@ -1074,7 +1085,7 @@ function bisectCForP(
       fA = fMid;
     }
   }
-  return 0.5 * (cA + cB);
+  return returnMcSolve(0.5 * (cA + cB), 0);
 }
 
 /**
@@ -1106,6 +1117,11 @@ export function buildMomentCurvature(
   mcNeutralAxisArr.length = 0;
   mcEpsCArr.length = 0;
   mcEpsSArr.length = 0;
+  mcMissStartPhiArr.length = 0;
+  mcMissEndPhiArr.length = 0;
+  mcRootNotFoundCount = 0;
+  mcNearMissAcceptedCount = 0;
+  mcLastSolveMode = -1;
 
   if (nSteps < 5) return 0;
   if (fibersX.length == 0 || barsX.length == 0) return 0;
@@ -1153,6 +1169,9 @@ export function buildMomentCurvature(
   let cHint = concreteModel == 0 ? depth * 30.0 : depth * 0.6;
   if (cHint < depth * 5e-5) cHint = depth * 5e-5;
 
+  let inMissRange = false;
+  let missStartPhi = -1.0;
+
   for (let i = 0; i < nSteps; i++) {
     let t = <f64>i / <f64>(nSteps - 1);
     let phi = Math.exp(logMin + t * (logMax - logMin));
@@ -1164,7 +1183,21 @@ export function buildMomentCurvature(
     if (cLo >= cMaxB) continue;
 
     let c = bisectCForP(nx, ny, phi, pKn, cHint, cLo, cMaxB, k1, concStress, fyd, esKn, barArea);
-    if (c < 0.0) continue;
+    if (c < 0.0) {
+      mcRootNotFoundCount += 1;
+      if (!inMissRange) {
+        inMissRange = true;
+        missStartPhi = phi;
+      }
+      continue;
+    }
+    if (inMissRange) {
+      mcMissStartPhiArr.push(missStartPhi);
+      mcMissEndPhiArr.push(phi);
+      inMissRange = false;
+      missStartPhi = -1.0;
+    }
+    if (mcLastSolveMode == 1) mcNearMissAcceptedCount += 1;
     cHint = c;
 
     let epsTop = phi * c;
@@ -1190,6 +1223,11 @@ export function buildMomentCurvature(
     }
     let epsS = phi * (c - (sMax - minBarS));
     mcEpsSArr.push(epsS);
+  }
+
+  if (inMissRange) {
+    mcMissStartPhiArr.push(missStartPhi);
+    mcMissEndPhiArr.push(phiMax);
   }
 
   return mcPhiArr.length;
@@ -1222,4 +1260,26 @@ export function getMcEpsC(index: i32): f64 {
 export function getMcEpsS(index: i32): f64 {
   if (index < 0 || index >= mcEpsSArr.length) return 0.0;
   return unchecked(mcEpsSArr[index]);
+}
+
+export function getMcRootNotFoundCount(): i32 {
+  return mcRootNotFoundCount;
+}
+
+export function getMcNearMissAcceptedCount(): i32 {
+  return mcNearMissAcceptedCount;
+}
+
+export function getMcMissRangeCount(): i32 {
+  return mcMissStartPhiArr.length;
+}
+
+export function getMcMissRangeStart(index: i32): f64 {
+  if (index < 0 || index >= mcMissStartPhiArr.length) return 0.0;
+  return unchecked(mcMissStartPhiArr[index]);
+}
+
+export function getMcMissRangeEnd(index: i32): f64 {
+  if (index < 0 || index >= mcMissEndPhiArr.length) return 0.0;
+  return unchecked(mcMissEndPhiArr[index]);
 }

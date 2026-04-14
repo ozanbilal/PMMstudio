@@ -1,5 +1,4 @@
 import "./style.css";
-import Plotly from "plotly.js-dist-min";
 
 type Shape = "rect" | "circle";
 type CodeMode = "ts500" | "ts500_tbdy" | "aci318_19";
@@ -9,6 +8,7 @@ type ThemeMode = "dark" | "light";
 type PSignMode = "compression_positive" | "compression_negative";
 type ComplianceStatus = "pass" | "fail" | "info";
 type StatusLevel = "info" | "danger";
+type AllowedReportLogoMime = "image/png" | "image/jpeg" | "image/webp";
 
 interface WasmExports {
   setConcreteModel: (model: number, tieSpacingConf: number) => void;
@@ -85,6 +85,11 @@ interface WasmExports {
   getMcNeutralAxis: (index: number) => number;
   getMcEpsC: (index: number) => number;
   getMcEpsS: (index: number) => number;
+  getMcRootNotFoundCount: () => number;
+  getMcNearMissAcceptedCount: () => number;
+  getMcMissRangeCount: () => number;
+  getMcMissRangeStart: (index: number) => number;
+  getMcMissRangeEnd: (index: number) => number;
 }
 
 interface LoadCase {
@@ -150,6 +155,12 @@ interface ReportSectionOptions {
   appendix: boolean;
 }
 
+interface ReportLogoAsset {
+  name: string;
+  mime: AllowedReportLogoMime;
+  dataUrl: string;
+}
+
 interface ReportMeta {
   project: string;
   company: string;
@@ -159,7 +170,7 @@ interface ReportMeta {
   checkedBy: string;
   revision: string;
   reportDate: string;
-  logoDataUrl: string;
+  logo: ReportLogoAsset | null;
   sections: ReportSectionOptions;
 }
 
@@ -223,19 +234,23 @@ interface ProjectReportState {
   checkedBy: string;
   revision: string;
   reportDate: string;
-  logoDataUrl: string;
-  logoName: string;
+  logo: ReportLogoAsset | null;
   sections: ReportSectionOptions;
 }
 
-interface ProjectFileV1 {
+interface ProjectFileV2 {
   schema: "pmmstudio-project";
-  version: 1;
+  version: 2;
   savedAt: string;
   input: ProjectInputState;
   sections?: SectionDef[];
   loadSheet: LoadSheetRow[];
   report: ProjectReportState;
+}
+
+interface ParsedProjectFile {
+  project: ProjectFileV2;
+  warnings: string[];
 }
 
 interface MphiReportSection {
@@ -264,6 +279,43 @@ interface ReportSnapshot {
   pmm3dDataUrl: string;
   mphi0: MphiReportSection;
   mphi90: MphiReportSection;
+}
+
+function cloneMcData(data: McData): McData {
+  return {
+    phi: [...data.phi],
+    moment: [...data.moment],
+    neutralAxis: [...data.neutralAxis],
+    epsC: [...data.epsC],
+    epsS: [...data.epsS],
+    requestedSteps: data.requestedSteps,
+    solvedSteps: data.solvedSteps,
+    effectiveConcreteModel: data.effectiveConcreteModel,
+    diagnostics: {
+      rootNotFoundCount: data.diagnostics.rootNotFoundCount,
+      nearMissAcceptedCount: data.diagnostics.nearMissAcceptedCount,
+      missRanges: data.diagnostics.missRanges.map((range) => ({ ...range })),
+    },
+    flags: { ...data.flags },
+    monitoring: data.monitoring.map((item) => ({
+      key: item.key,
+      label: item.label,
+      kind: item.kind,
+      x: item.x,
+      y: item.y,
+      eps: [...item.eps],
+      sigmaMpa: [...item.sigmaMpa],
+    })),
+  };
+}
+
+function findBatchCurve(angleDeg: number): McBatchCurve | null {
+  for (const curve of state.mcBatchData) {
+    if (Math.abs(normalizeDeg(curve.angleDeg) - normalizeDeg(angleDeg)) < 1e-9) {
+      return curve;
+    }
+  }
+  return null;
 }
 
 interface ResultRow extends LoadCase {
@@ -509,6 +561,7 @@ const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("App root not found");
 
 app.innerHTML = `
+  <a class="skip-link" href="#workspace-main" data-i18n="skipToMain">Ana içeriğe geç</a>
   <div class="app-shell">
     <header class="hero">
       <div class="hero-copy">
@@ -554,7 +607,7 @@ app.innerHTML = `
       </svg>
     </header>
 
-    <main id="workspace-main" class="workspace">
+    <main id="workspace-main" class="workspace" tabindex="-1">
       <details class="panel controls accordion controls-accordion" id="controls-accordion" open>
         <summary class="accordion-head controls-accordion-head">
           <h2 data-i18n="headingInputs">Girdi ve Kesit Tanımı</h2>
@@ -566,6 +619,7 @@ app.innerHTML = `
             <button id="run-btn" class="run-btn" data-i18n="btnRun">PMM Hesapla</button>
           </div>
         </div>
+        <div id="toast-stack" class="toast-stack" aria-live="polite" aria-atomic="true"></div>
         <section class="status-console status-console--panel" aria-live="polite">
           <p class="status-console-title" data-i18n="headingRunLog">Çalışma Günlüğü</p>
           <p id="status" class="status status-chip" data-i18n="statusWasmLoading">WASM modülü yükleniyor...</p>
@@ -640,10 +694,6 @@ app.innerHTML = `
                   <span data-i18n="labelBars">Dairesel toplam bar</span>
                   <input id="bars" type="number" value="12" min="3" step="1" />
                 </label>
-                <label id="field-double-layer" class="checkbox-inline">
-                  <input id="double-layer" type="checkbox" />
-                  <span data-i18n="labelDoubleLayer">Çift sıra donatı kullan</span>
-                </label>
                 <label id="field-bars-x2" class="hidden">
                   <span data-i18n="labelBarsX2">2. sıra üst/alt bar adedi</span>
                   <input id="bars-x2" type="number" value="2" min="2" step="1" />
@@ -684,10 +734,16 @@ app.innerHTML = `
                 </label>
               </div>
 
-              <label class="checkbox">
-                <input id="cover-to-center" type="checkbox" />
-                <span data-i18n="labelCoverToCenter">Cover değeri donatı merkezine kadar verildi</span>
-              </label>
+              <div class="section-option-row">
+                <label id="field-double-layer" class="checkbox-inline section-option-chip">
+                  <input id="double-layer" type="checkbox" />
+                  <span data-i18n="labelDoubleLayer">Çift sıra donatı kullan</span>
+                </label>
+                <label class="checkbox-inline section-option-chip">
+                  <input id="cover-to-center" type="checkbox" />
+                  <span data-i18n="labelCoverToCenter">Cover değeri donatı merkezine kadar verildi</span>
+                </label>
+              </div>
             </div>
             </section>
 
@@ -772,66 +828,73 @@ app.innerHTML = `
                 <span data-i18n="labelEpsCu">ecu</span>
                 <input id="eps-cu" type="number" value="0.003" min="0.001" step="0.0001" />
               </label>
-
-              <label>
-                <span data-i18n="labelMesh">Fiber mesh</span>
-                <input id="mesh" type="number" value="55" min="10" step="1" />
-              </label>
-              <label>
-                <span data-i18n="labelNAngle">Açı sayısı</span>
-                <input id="n-angle" type="number" value="72" min="8" step="1" />
-              </label>
-              <label>
-                <span data-i18n="labelNDepth">Nötr eksen sayısı</span>
-                <input id="n-depth" type="number" value="55" min="10" step="1" />
-              </label>
-
-              <label>
-                <span data-i18n="labelPhiP">phiP (eksenel)</span>
-                <input id="phi-p" type="number" value="0.65" min="0.10" max="1.00" step="0.01" />
-              </label>
-              <label>
-                <span data-i18n="labelPhiM">phiM (eğilme)</span>
-                <input id="phi-m" type="number" value="0.90" min="0.10" max="1.00" step="0.01" />
-              </label>
-              <label>
-                <span data-i18n="labelPCutoff">P cut-off katsayısı</span>
-                <input id="p-cutoff-ratio" type="number" value="0.80" min="0.10" max="1.00" step="0.01" />
-              </label>
-              <label>
-                <span data-i18n="labelPVisualScale">3B P ekseni görsel ölçeği</span>
-                <input id="p-visual-scale" type="number" value="0.55" min="0.20" max="1.50" step="0.05" />
-              </label>
-              <label>
-                <span data-i18n="labelSurfaceOpacity">3B yüzey saydamlığı</span>
-                <input id="surface-opacity" type="range" value="0.88" min="0.15" max="1.00" step="0.01" />
-                <small id="surface-opacity-value" class="range-hint">0.88</small>
-              </label>
-              <label>
-                <span data-i18n="labelPSign">P işaret konvansiyonu</span>
-                <select id="p-sign">
-                  <option value="compression_positive" data-i18n="optPSignPositive">Basınç (+)</option>
-                  <option value="compression_negative" data-i18n="optPSignNegative">Basınç (-) [SAP2000]</option>
-                </select>
-              </label>
             </div>
 
-            <section id="expected-strength-panel" class="expected-strength-panel hidden">
-              <label class="checkbox">
-                <input id="use-expected-strength" type="checkbox" />
-                <span data-i18n="labelExpectedStrength">TBDY beklenen dayanım artışı aktif (önerilen: fce=1.30*fck, fye=1.20*fyk)</span>
-              </label>
-              <div class="grid expected-strength-grid">
-                <label id="field-expected-fck-factor" class="hidden">
-                  <span data-i18n="labelExpectedFckFactor">Beklenen beton katsayısı fce/fck</span>
-                  <input id="expected-fck-factor" type="number" value="1.30" min="1.00" max="2.00" step="0.01" />
+            <details class="analysis-advanced">
+              <summary class="analysis-advanced-summary">
+                <span data-i18n="headingAdvancedAnalysis">Gelişmiş analiz ayarları</span>
+                <span class="accordion-hint" data-i18n="advancedAnalysisHint">İleri seviye çözüm, görselleştirme ve tasarım katsayıları</span>
+              </summary>
+              <div class="grid controls-grid controls-grid--analysis analysis-advanced-grid">
+                <label>
+                  <span data-i18n="labelMesh">Fiber mesh</span>
+                  <input id="mesh" type="number" value="55" min="10" max="75" step="1" />
                 </label>
-                <label id="field-expected-fyk-factor" class="hidden">
-                  <span data-i18n="labelExpectedFykFactor">Beklenen çelik katsayısı fye/fyk</span>
-                  <input id="expected-fyk-factor" type="number" value="1.20" min="1.00" max="2.00" step="0.01" />
+                <label>
+                  <span data-i18n="labelNAngle">Açı sayısı</span>
+                  <input id="n-angle" type="number" value="72" min="8" max="96" step="1" />
+                </label>
+                <label>
+                  <span data-i18n="labelNDepth">Nötr eksen sayısı</span>
+                  <input id="n-depth" type="number" value="55" min="10" max="80" step="1" />
+                </label>
+                <label>
+                  <span data-i18n="labelPhiP">phiP (eksenel)</span>
+                  <input id="phi-p" type="number" value="0.65" min="0.10" max="1.00" step="0.01" />
+                </label>
+                <label>
+                  <span data-i18n="labelPhiM">phiM (eğilme)</span>
+                  <input id="phi-m" type="number" value="0.90" min="0.10" max="1.00" step="0.01" />
+                </label>
+                <label>
+                  <span data-i18n="labelPCutoff">P cut-off katsayısı</span>
+                  <input id="p-cutoff-ratio" type="number" value="0.80" min="0.10" max="1.00" step="0.01" />
+                </label>
+                <label>
+                  <span data-i18n="labelPVisualScale">3B P ekseni görsel ölçeği</span>
+                  <input id="p-visual-scale" type="number" value="0.55" min="0.20" max="1.50" step="0.05" />
+                </label>
+                <label>
+                  <span data-i18n="labelSurfaceOpacity">3B yüzey saydamlığı</span>
+                  <input id="surface-opacity" type="range" value="0.88" min="0.15" max="1.00" step="0.01" />
+                  <small id="surface-opacity-value" class="range-hint">0.88</small>
+                </label>
+                <label>
+                  <span data-i18n="labelPSign">P işaret konvansiyonu</span>
+                  <select id="p-sign">
+                    <option value="compression_positive" data-i18n="optPSignPositive">Basınç (+)</option>
+                    <option value="compression_negative" data-i18n="optPSignNegative">Basınç (-) [SAP2000]</option>
+                  </select>
                 </label>
               </div>
-            </section>
+
+              <section id="expected-strength-panel" class="expected-strength-panel hidden">
+                <label class="checkbox">
+                  <input id="use-expected-strength" type="checkbox" />
+                  <span data-i18n="labelExpectedStrength">TBDY beklenen dayanım artışı aktif (önerilen: fce=1.30*fck, fye=1.20*fyk)</span>
+                </label>
+                <div class="grid expected-strength-grid">
+                  <label id="field-expected-fck-factor" class="hidden">
+                    <span data-i18n="labelExpectedFckFactor">Beklenen beton katsayısı fce/fck</span>
+                    <input id="expected-fck-factor" type="number" value="1.30" min="1.00" max="2.00" step="0.01" />
+                  </label>
+                  <label id="field-expected-fyk-factor" class="hidden">
+                    <span data-i18n="labelExpectedFykFactor">Beklenen çelik katsayısı fye/fyk</span>
+                    <input id="expected-fyk-factor" type="number" value="1.20" min="1.00" max="2.00" step="0.01" />
+                  </label>
+                </div>
+              </section>
+            </details>
           </section>
         </div>
 
@@ -840,7 +903,7 @@ app.innerHTML = `
             <h3 data-i18n="headingSectionPreview">Kesit ve Donatı Yerleşimi</h3>
             <p id="section-preview-meta" class="section-preview-meta">-</p>
           </div>
-          <canvas id="section-preview" width="520" height="260"></canvas>
+          <canvas id="section-preview" width="520" height="260" role="img"></canvas>
         </section>
 
         <section class="input-group input-group--loads">
@@ -858,11 +921,11 @@ app.innerHTML = `
             <table id="load-sheet-table" class="load-sheet-table" aria-label="Yük tablo girişi">
               <thead>
                 <tr>
-                  <th data-i18n="colLoadSelect">Seç</th>
-                  <th data-i18n="colLoadNameEdit">Yük Adı</th>
-                  <th data-i18n="colLoadPuEdit">Pu (kN)</th>
-                  <th data-i18n="colLoadMuxEdit">Mux (kNm)</th>
-                  <th data-i18n="colLoadMuyEdit">Muy (kNm)</th>
+                  <th id="load-col-select" data-i18n="colLoadSelect">Seç</th>
+                  <th id="load-col-name" data-i18n="colLoadNameEdit">Yük Adı</th>
+                  <th id="load-col-pu" data-i18n="colLoadPuEdit">Pu (kN)</th>
+                  <th id="load-col-mux" data-i18n="colLoadMuxEdit">Mux (kNm)</th>
+                  <th id="load-col-muy" data-i18n="colLoadMuyEdit">Muy (kNm)</th>
                 </tr>
               </thead>
               <tbody id="load-sheet-body"></tbody>
@@ -924,7 +987,7 @@ L3,650,90,45</textarea>
               </label>
               <label class="report-logo-field">
                 <span data-i18n="labelReportLogo">Kurumsal logo</span>
-                <input id="report-logo" type="file" accept="image/*" />
+                <input id="report-logo" type="file" accept="image/png,image/jpeg,image/webp" />
                 <small id="report-logo-name" class="range-hint" data-i18n="labelReportLogoNoFile">Logo seçilmedi</small>
               </label>
             </div>
@@ -976,7 +1039,7 @@ L3,650,90,45</textarea>
             </label>
           </div>
         </div>
-        <canvas id="plot" width="1100" height="500"></canvas>
+        <canvas id="plot" width="1100" height="500" role="img"></canvas>
         <div class="viz3d-split">
           <section class="slice-panel">
             <div class="slice-head">
@@ -1008,7 +1071,7 @@ L3,650,90,45</textarea>
               </table>
             </div>
           </section>
-          <div id="plot-3d" class="plot3d"></div>
+          <div id="plot-3d" class="plot3d" role="img"></div>
         </div>
         </section>
 
@@ -1043,9 +1106,10 @@ L3,650,90,45</textarea>
             </p>
             <div class="mc-workspace">
               <section class="mc-main-stage">
-                <div id="plot-mc" class="plot-mc"></div>
+                <div id="plot-mc" class="plot-mc" role="img"></div>
                 <div class="mc-meta-stack">
                   <div id="mc-stats" class="mc-stats hidden"></div>
+                  <div id="mc-monitoring" class="mc-monitoring hidden"></div>
                   <div id="mc-hover-info" class="mc-hover-info hidden">
                     <span class="mc-hi-label">Concrete Strain:</span><span id="mc-hi-epsc" class="mc-hi-val">—</span>
                     <span class="mc-hi-label">Steel Strain:</span><span id="mc-hi-epss" class="mc-hi-val">—</span>
@@ -1054,7 +1118,7 @@ L3,650,90,45</textarea>
                 </div>
               </section>
               <section class="mc-side-card mc-side-card--strain">
-                <div id="plot-mc-strain" class="plot-mc-strain"></div>
+                  <div id="plot-mc-strain" class="plot-mc-strain" role="img"></div>
               </section>
               <section class="mc-side-card mc-side-card--table">
                 <div class="mc-table-shell">
@@ -1067,6 +1131,7 @@ L3,650,90,45</textarea>
               <button type="button" id="mc-copy-btn" class="action-btn" data-i18n="btnMcCopy">Veriyi Kopyala</button>
               <button type="button" id="mc-fullscreen-btn" class="action-btn" data-i18n="btnMcFullscreen">Büyüt</button>
             </div>
+            <div id="mc-batch" class="mc-batch hidden"></div>
           </div>
         </details>
       </div>
@@ -1126,6 +1191,10 @@ L3,650,90,45</textarea>
               <tbody></tbody>
             </table>
           </div>
+          <section class="governing-panel">
+            <h3 data-i18n="headingGoverning">Belirleyici Yük ve Karar Özeti</h3>
+            <div id="governing-summary" class="governing-summary"></div>
+          </section>
         </div>
       </details>
 
@@ -1237,6 +1306,7 @@ const refs = {
   reportSecCompliance: must<HTMLInputElement>("report-sec-compliance"),
   reportSecMphi: must<HTMLInputElement>("report-sec-mphi"),
   reportSecAppendix: must<HTMLInputElement>("report-sec-appendix"),
+  toastStack: must<HTMLDivElement>("toast-stack"),
   status: must<HTMLParagraphElement>("status"),
   statusLog: must<HTMLOListElement>("status-log"),
   rhoDisplay: must<HTMLParagraphElement>("rho-display"),
@@ -1252,6 +1322,7 @@ const refs = {
   plot3d: must<HTMLDivElement>("plot-3d"),
   sliceBody: must<HTMLTableSectionElement>("slice-table").querySelector("tbody")!,
   tableBody: must<HTMLTableSectionElement>("results-table").querySelector("tbody")!,
+  governingSummary: must<HTMLDivElement>("governing-summary"),
   complianceBody: must<HTMLTableSectionElement>("compliance-table").querySelector("tbody")!,
   complianceSummary: must<HTMLParagraphElement>("compliance-summary"),
   fieldWidth: must<HTMLElement>("field-width"),
@@ -1273,9 +1344,11 @@ const refs = {
   mcRunBtn: must<HTMLButtonElement>("mc-run-btn"),
   plotMc: must<HTMLDivElement>("plot-mc"),
   mcStats: must<HTMLDivElement>("mc-stats"),
+  mcMonitoring: must<HTMLDivElement>("mc-monitoring"),
   mcFullscreenBtn: must<HTMLButtonElement>("mc-fullscreen-btn"),
   mcCloseBtn: must<HTMLButtonElement>("mc-close-btn"),
   mcDataTable: must<HTMLDivElement>("mc-data-table"),
+  mcBatch: must<HTMLDivElement>("mc-batch"),
   mcCopyBtn: must<HTMLButtonElement>("mc-copy-btn"),
   mcExportBtn: must<HTMLButtonElement>("mc-export-btn"),
   plotMcStrain: must<HTMLDivElement>("plot-mc-strain"),
@@ -1293,6 +1366,45 @@ interface McData {
   epsS: number[];
   requestedSteps: number;
   solvedSteps: number;
+  effectiveConcreteModel: ConcreteModel;
+  diagnostics: McDiagnostics;
+  flags: McEventFlags;
+  monitoring: McMonitoringPointSeries[];
+}
+
+interface McPhiRange {
+  start: number;
+  end: number;
+}
+
+interface McDiagnostics {
+  rootNotFoundCount: number;
+  nearMissAcceptedCount: number;
+  missRanges: McPhiRange[];
+}
+
+interface McEventFlags {
+  firstKinkIdx: number;
+  steelYieldIdx: number;
+  peakIdx: number;
+  coverCrushIdx: number;
+  lastValidIdx: number;
+}
+
+interface McMonitoringPointSeries {
+  key: string;
+  label: string;
+  kind: "concrete" | "steel";
+  x: number;
+  y: number;
+  eps: number[];
+  sigmaMpa: number[];
+}
+
+interface McBatchCurve {
+  angleDeg: number;
+  data: McData | null;
+  error: string | null;
 }
 
 const state: {
@@ -1311,6 +1423,7 @@ const state: {
   lastInput: AppInput | null;
   statusLogEntries: Array<{ text: string; level: StatusLevel }>;
   mcData: McData | null;
+  mcBatchData: McBatchCurve[];
   loadSheet: LoadSheetRow[];
   loadIssues: LoadSheetValidationIssue[];
   selectedLoadRows: Set<number>;
@@ -1318,7 +1431,7 @@ const state: {
   loadSelectionAnchor: { row: number; col: LoadSheetCol } | null;
   selectedLoadRange: LoadCellRange | null;
   loadMouseSelecting: boolean;
-  reportLogoDataUrl: string;
+  reportLogo: ReportLogoAsset | null;
   showNominalSurface: boolean;
   sections: SectionDef[];
   activeSectionIdx: number;
@@ -1340,6 +1453,7 @@ const state: {
   lastInput: null,
   statusLogEntries: [],
   mcData: null,
+  mcBatchData: [],
   loadSheet: [],
   loadIssues: [],
   selectedLoadRows: new Set<number>(),
@@ -1347,7 +1461,7 @@ const state: {
   loadSelectionAnchor: null,
   selectedLoadRange: null,
   loadMouseSelecting: false,
-  reportLogoDataUrl: "",
+  reportLogo: null,
   showNominalSurface: false,
   sections: [],
   activeSectionIdx: 0,
@@ -1360,6 +1474,7 @@ const I18N = {
     kicker: "TS500 + WebAssembly",
     title: "Concrete Column PMM Studio",
     subtitle: "Dairesel ve dörtgen kesit için tarayıcıda çalışan PMM/DCR kontrol aracı",
+    skipToMain: "Ana içeriğe geç",
     labelLanguage: "Dil / Language",
     optLangTr: "Türkçe",
     optLangEn: "English",
@@ -1521,6 +1636,8 @@ const I18N = {
     headingGroupDesign: "Tasarım Seçimleri",
     headingGroupSection: "Kesit ve Donatı",
     headingGroupAnalysis: "Malzeme ve Analiz",
+    headingAdvancedAnalysis: "Gelişmiş analiz ayarları",
+    advancedAnalysisHint: "İleri seviye çözüm, görselleştirme ve tasarım katsayıları",
     headingGroupLoads: "Yük Tanımı ve Dışa Aktarım",
     headingCloud: "PMM Nokta Bulutu",
     labelProjection: "Görünüm",
@@ -1536,6 +1653,7 @@ const I18N = {
     colSliceMx: "Mx (kNm)",
     colSliceMy: "My (kNm)",
     headingResults: "Yük Sonuçları",
+    headingGoverning: "Belirleyici Yük ve Karar Özeti",
     accordionHint: "Aç / Kapat",
     colLoad: "Yük",
     colPu: "Pu",
@@ -1571,15 +1689,23 @@ const I18N = {
     statusReportPdfExported: "PDF yazdırma önizlemesi açıldı.",
     statusReportMetaMissing: "Rapor için en az Proje adı ve Rapor tarihi alanlarını doldurun.",
     statusReportLogoLoaded: "Kurumsal logo rapora eklenecek şekilde yüklendi.",
+    statusReportLogoInvalidType: "Logo yalnızca PNG, JPEG veya WEBP olabilir.",
+    statusReportLogoTooLarge: "Logo dosyası 1 MB sınırını aşıyor.",
+    statusReportLogoInvalidData: "Logo verisi güvenli değil veya desteklenmiyor.",
+    statusProjectLogoDroppedInvalid: "Geçersiz logo verisi atlandı.",
     statusReportSectionNone: "Rapor için en az bir bölüm seçin.",
     statusProjectSaved: "PMM proje dosyası dışa aktarıldı.",
     statusProjectOpened: "PMM proje dosyası yüklendi. Sonuçlar temizlendi; yeniden PMM Hesapla ile güncelleyin.",
     statusProjectInvalid: "Geçersiz PMM proje dosyası.",
+    statusProjectVersionUnsupported: "Bu PMM proje dosyası sürümü desteklenmiyor. Lütfen version 2 dosyası kullanın.",
+    statusProjectFileTooLarge: "PMM proje dosyası 1.5 MB sınırını aşıyor.",
     statusLoadSheetCopied: "Yük tablosu TSV olarak panoya kopyalandı.",
     statusLoadSheetCopyEmpty: "Kopyalanacak yük satırı bulunamadı.",
     statusLoadSheetImported: "CSV yükleri tabloya eklendi.",
     statusLoadSheetTextApplied: "Metin girdisi yük tablosuna aktarıldı.",
     statusLoadSheetInvalid: "Yük tablosunda hatalı hücreler var. Lütfen işaretli alanları düzeltin.",
+    statusLoadSheetFileTooLarge: "CSV dosyası 512 KB sınırını aşıyor.",
+    statusLoadSheetTooManyRows: "En fazla 500 dolu yük satırı kullanılabilir.",
     headingMc: "Moment – Eğrilik Analizi",
     mcIntro: "Verilen eksenel yük altında tek eksenli eğilme için M–φ eğrisi hesaplar. Önce PMM analizi çalıştırılmış olmalıdır.",
     labelMcP: "Eksenel yük P (kN)",
@@ -1595,6 +1721,8 @@ const I18N = {
     mcStatsPhiU: "φu",
     mcStatsPhiY: "φy (bilineer)",
     mcStatsDuctility: "μφ = φu/φy",
+    mcStatsConcreteModel: "M-φ beton modeli",
+    mcStatsMethodNote: "Not: M-φ analizi sürekli malzeme modeli ve indirimsiz kesit dayanımları ile üretilir; PMM/code-check hesabı seçili kod yaklaşımında kalır.",
     btnMcFullscreen: "Büyüt",
     btnMcCollapse: "Küçült",
     btnMcCopy: "Veriyi Kopyala",
@@ -1605,6 +1733,7 @@ const I18N = {
     kicker: "TS500 + WebAssembly",
     title: "Concrete Column PMM Studio",
     subtitle: "Browser-based PMM/DCR tool for circular and rectangular sections",
+    skipToMain: "Skip to main content",
     labelLanguage: "Language",
     optLangTr: "Turkish",
     optLangEn: "English",
@@ -1766,6 +1895,8 @@ const I18N = {
     headingGroupDesign: "Design Settings",
     headingGroupSection: "Section & Rebar",
     headingGroupAnalysis: "Material & Analysis",
+    headingAdvancedAnalysis: "Advanced analysis settings",
+    advancedAnalysisHint: "Solver density, visualization, and design factors",
     headingGroupLoads: "Load Input & Export",
     headingCloud: "PMM Point Cloud",
     labelProjection: "View",
@@ -1781,6 +1912,7 @@ const I18N = {
     colSliceMx: "Mx (kNm)",
     colSliceMy: "My (kNm)",
     headingResults: "Load Results",
+    headingGoverning: "Governing Load and Decision Summary",
     accordionHint: "Expand / Collapse",
     colLoad: "Load",
     colPu: "Pu",
@@ -1816,15 +1948,23 @@ const I18N = {
     statusReportPdfExported: "PDF print preview opened.",
     statusReportMetaMissing: "Fill at least Project name and Report date before export.",
     statusReportLogoLoaded: "Corporate logo loaded and will be included in report.",
+    statusReportLogoInvalidType: "Logo must be PNG, JPEG, or WEBP.",
+    statusReportLogoTooLarge: "Logo file exceeds the 1 MB limit.",
+    statusReportLogoInvalidData: "Logo data is unsafe or unsupported.",
+    statusProjectLogoDroppedInvalid: "Invalid embedded logo was discarded.",
     statusReportSectionNone: "Select at least one report section.",
     statusProjectSaved: "PMM project file exported.",
     statusProjectOpened: "PMM project file loaded. Stored results were cleared; run PMM again to refresh outputs.",
     statusProjectInvalid: "Invalid PMM project file.",
+    statusProjectVersionUnsupported: "This PMM project file version is not supported. Please use a version 2 file.",
+    statusProjectFileTooLarge: "PMM project file exceeds the 1.5 MB limit.",
     statusLoadSheetCopied: "Load grid copied to clipboard as TSV.",
     statusLoadSheetCopyEmpty: "No load rows available for copy.",
     statusLoadSheetImported: "CSV loads appended to load grid.",
     statusLoadSheetTextApplied: "Text input transferred to load grid.",
     statusLoadSheetInvalid: "Load grid has invalid cells. Please correct highlighted fields.",
+    statusLoadSheetFileTooLarge: "CSV file exceeds the 512 KB limit.",
+    statusLoadSheetTooManyRows: "No more than 500 non-empty load rows are allowed.",
     headingMc: "Moment – Curvature Analysis",
     mcIntro: "Computes the M–φ curve for uniaxial bending under a given axial load. Run PMM analysis first.",
     labelMcP: "Axial load P (kN)",
@@ -1840,6 +1980,8 @@ const I18N = {
     mcStatsPhiU: "φu",
     mcStatsPhiY: "φy (bilinear)",
     mcStatsDuctility: "μφ = φu/φy",
+    mcStatsConcreteModel: "M-φ concrete model",
+    mcStatsMethodNote: "Note: M-φ analysis uses a continuous material model with unreduced section strengths; PMM/code-check remains on the selected code approach.",
     btnMcFullscreen: "Expand",
     btnMcCollapse: "Collapse",
     btnMcCopy: "Copy Data",
@@ -1856,6 +1998,17 @@ const DEFAULT_LOAD_SHEET: LoadSheetRow[] = [
   { name: "L2", pu: "1800", mux: "200", muy: "140" },
   { name: "L3", pu: "650", mux: "90", muy: "45" },
 ];
+const PROJECT_FILE_VERSION = 2;
+const PROJECT_FILE_MAX_BYTES = Math.floor(1.5 * 1024 * 1024);
+const LOADS_CSV_MAX_BYTES = 512 * 1024;
+const REPORT_LOGO_MAX_BYTES = 1024 * 1024;
+const LOAD_SHEET_MAX_NON_EMPTY_ROWS = 500;
+const REPORT_LOGO_MIME_TYPES: readonly AllowedReportLogoMime[] = ["image/png", "image/jpeg", "image/webp"];
+const ANALYSIS_LIMITS = {
+  mesh: { min: 10, max: 75, fallback: 55 },
+  nAngle: { min: 8, max: 96, fallback: 72 },
+  nDepth: { min: 10, max: 80, fallback: 55 },
+} as const;
 
 function isNumericLoadCol(col: LoadSheetCol): col is "pu" | "mux" | "muy" {
   return col === "pu" || col === "mux" || col === "muy";
@@ -1937,6 +2090,21 @@ function setStatus(text: string, level: StatusLevel = "info", writeLog = true): 
   if (writeLog) pushStatusLog(text, level);
 }
 
+function showToast(text: string, level: StatusLevel = "info", durationMs = 4200): void {
+  const message = text.trim();
+  if (message.length === 0) return;
+  const toast = document.createElement("div");
+  toast.className = `toast ${level === "danger" ? "danger" : "info"}`;
+  toast.setAttribute("role", level === "danger" ? "alert" : "status");
+  toast.textContent = message;
+  refs.toastStack.appendChild(toast);
+  window.requestAnimationFrame(() => toast.classList.add("is-visible"));
+  window.setTimeout(() => {
+    toast.classList.remove("is-visible");
+    window.setTimeout(() => toast.remove(), 220);
+  }, durationMs);
+}
+
 function syncControlsAccordionLayout(): void {
   const collapsed = !refs.controlsAccordion.open;
   refs.workspace.classList.toggle("workspace-controls-collapsed", collapsed);
@@ -1981,9 +2149,12 @@ function applyLocale(): void {
     if (!key) continue;
     el.textContent = tx(key);
   }
-  if (!state.reportLogoDataUrl) {
+  applyStaticA11yLabels();
+  if (!state.reportLogo) {
     refs.reportLogoName.textContent = tx("labelReportLogoNoFile");
   }
+  renderSectionStrip();
+  renderLoadSheetGrid();
   if (state.results.length === 0) {
     setStatus(tx("statusWasmReady"), "info", false);
   }
@@ -1997,6 +2168,7 @@ function applyLocale(): void {
   if (state.results.length > 0) {
     renderTable(state.results);
   }
+  renderGoverningSummary();
   renderLoadSheetGrid();
   render3dSliceTable(state.surface);
   renderSectionPreview();
@@ -2023,6 +2195,8 @@ async function init(): Promise<void> {
   refs.reportDate.value = formatDateInputValue(new Date());
   refs.reportDocTitle.value = "Kolon PMM Teknik Raporu";
   refs.reportLogoName.textContent = tx("labelReportLogoNoFile");
+  applyStaticA11yLabels();
+  renderGoverningSummary();
 
   const savedLang = localStorage.getItem("pmm-lang");
   if (savedLang === "tr" || savedLang === "en") state.lang = savedLang;
@@ -2078,6 +2252,7 @@ async function init(): Promise<void> {
   state.showNominalSurface = localStorage.getItem("pmm-show-nominal-surface") === "1";
   refs.showNominalSurface.checked = state.showNominalSurface;
   renderSurfaceOpacityValue();
+  clampAnalysisControlInputs();
 
   applyLocale();
   syncLoadsTextareaFromSheet();
@@ -2170,6 +2345,10 @@ async function init(): Promise<void> {
   refs.expectedFykFactor.addEventListener("input", () => {
     localStorage.setItem("pmm-expected-fyk-factor", refs.expectedFykFactor.value);
   });
+  for (const input of [refs.mesh, refs.nAngle, refs.nDepth]) {
+    input.addEventListener("change", clampAnalysisControlInputs);
+    input.addEventListener("blur", clampAnalysisControlInputs);
+  }
   refs.pVisualScale.addEventListener("input", () => {
     localStorage.setItem("pmm-p-visual", refs.pVisualScale.value);
     renderPlot3d(state.surface, state.results);
@@ -2232,7 +2411,10 @@ async function init(): Promise<void> {
   refs.exportSurface.addEventListener("click", exportSurfaceCsv);
   refs.exportReport.addEventListener("click", () => exportWordReport().catch(showError));
   refs.exportReportPdf.addEventListener("click", () => exportPdfReport().catch(showError));
-  refs.mcRunBtn.addEventListener("click", () => runMomentCurvature().catch(showError));
+  refs.mcRunBtn.addEventListener("click", () => runMomentCurvature().catch((error) => {
+    showError(error);
+    showToast(String(error instanceof Error ? error.message : error), "danger");
+  }));
   refs.mcFullscreenBtn.addEventListener("click", toggleMcFullscreen);
   refs.mcCloseBtn.addEventListener("click", closeMcFullscreen);
   refs.mcCopyBtn.addEventListener("click", () => copyMcData().catch(showError));
@@ -2397,11 +2579,11 @@ function renderSectionStrip(): void {
     card.className = `section-strip-card${isActive ? " active" : ""}`;
     card.dataset.idx = String(i);
 
-    const hitArea = document.createElement("div");
+    const hitArea = document.createElement("button");
     hitArea.className = "section-strip-hit";
-    hitArea.tabIndex = 0;
-    hitArea.setAttribute("role", "button");
+    hitArea.type = "button";
     hitArea.setAttribute("aria-pressed", isActive ? "true" : "false");
+    hitArea.setAttribute("aria-label", sectionSelectLabel(sec.name));
 
     const nameSpan = document.createElement("span");
     nameSpan.className = "section-strip-name";
@@ -2424,6 +2606,7 @@ function renderSectionStrip(): void {
       delBtn.className = "section-strip-del";
       delBtn.type = "button";
       delBtn.textContent = "\u00D7";
+      delBtn.setAttribute("aria-label", sectionDeleteLabel(sec.name));
       delBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         removeSection(i);
@@ -2433,12 +2616,6 @@ function renderSectionStrip(): void {
 
     hitArea.appendChild(chevron);
     hitArea.addEventListener("click", () => switchSection(i));
-    hitArea.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        switchSection(i);
-      }
-    });
     card.appendChild(hitArea);
     container.appendChild(card);
   }
@@ -3393,6 +3570,7 @@ function parseLoadSheetFromTextarea(raw: string): LoadSheetRow[] {
       muy: normalizeNumberToken(parts[hasName ? 3 : 2]),
     });
   }
+  assertLoadSheetRowLimit(parsed);
   return parsed;
 }
 
@@ -3469,7 +3647,9 @@ function refreshLoadSheetValidation(writeStatus: boolean): number {
   for (const cell of cells) {
     const row = Number(cell.dataset.row);
     const col = cell.dataset.col as LoadSheetCol;
-    cell.classList.toggle("invalid", issueSet.has(getLoadCellIssueKey(row, col)));
+    const isInvalid = issueSet.has(getLoadCellIssueKey(row, col));
+    cell.classList.toggle("invalid", isInvalid);
+    cell.setAttribute("aria-invalid", isInvalid ? "true" : "false");
   }
   if (writeStatus && issues.length > 0) {
     const issueText = issues
@@ -3491,18 +3671,21 @@ function renderLoadSheetGrid(): void {
         const invalidClass = issueSet.has(getLoadCellIssueKey(index, col)) ? " invalid" : "";
         const selectedClass = isCellInLoadRange(index, col, state.selectedLoadRange) ? " selected-cell" : "";
         const inputMode = col === "name" ? "text" : "decimal";
+        const ariaInvalid = issueSet.has(getLoadCellIssueKey(index, col)) ? "true" : "false";
         return `<td>
           <input class="load-cell${invalidClass}${selectedClass}"
             data-row="${index}"
             data-col="${col}"
             inputmode="${inputMode}"
+            aria-invalid="${ariaInvalid}"
+            aria-label="${escapeHtml(loadSheetCellLabel(index, col))}"
             value="${escapeHtml(value)}" />
         </td>`;
       };
       return `<tr data-row="${index}">
         <td class="load-select-cell">
-          <input type="checkbox" class="load-row-select" data-row="${index}" ${checked} />
-          <span class="load-row-id">${index + 1}</span>
+          <input type="checkbox" class="load-row-select" data-row="${index}" aria-label="${escapeHtml(loadSheetRowSelectLabel(index))}" ${checked} />
+          <span class="load-row-id" id="load-row-${index + 1}">${index + 1}</span>
         </td>
         ${makeCell("name")}
         ${makeCell("pu")}
@@ -3735,6 +3918,16 @@ async function importCsvToLoadSheet(): Promise<void> {
   if (!file) return;
   const parsed = await parseLoadsCsvFile(file);
   if (parsed.length === 0) return;
+  const nextRows = [
+    ...state.loadSheet,
+    ...parsed.map((row) => ({
+      name: row.name,
+      pu: toCsvNumber(row.pu),
+      mux: toCsvNumber(row.mux),
+      muy: toCsvNumber(row.muy),
+    })),
+  ];
+  assertLoadSheetRowLimit(nextRows);
   for (const row of parsed) {
     state.loadSheet.push({
       name: row.name,
@@ -3850,6 +4043,7 @@ function validateLoadSheetRows(rows: LoadSheetRow[]): { loads: LoadCase[]; issue
 }
 
 function collectLoadsFromSheet(): LoadCase[] {
+  assertLoadSheetRowLimit(state.loadSheet);
   const { loads, issues } = validateLoadSheetRows(state.loadSheet);
   state.loadIssues = issues;
   renderLoadSheetGrid();
@@ -3908,6 +4102,7 @@ async function runAnalysis(): Promise<void> {
   state.depthCount = input.nDepth;
 
   renderTable(results);
+  renderGoverningSummary();
   renderPlot(surface, results);
   renderPlot3d(surface, results);
   render3dSliceTable(surface);
@@ -3927,6 +4122,7 @@ async function runAnalysis(): Promise<void> {
 }
 
 function collectInputForSection(sec: SectionDef, loads: LoadCase[]): AppInput {
+  clampAnalysisControlInputs();
   return {
     codeMode: refs.codeMode.value as CodeMode,
     concreteModel: refs.concreteModel.value as ConcreteModel,
@@ -3957,9 +4153,9 @@ function collectInputForSection(sec: SectionDef, loads: LoadCase[]): AppInput {
     gammaS: n(refs.gammaS.value),
     es: n(refs.es.value),
     epsCu: n(refs.epsCu.value),
-    mesh: ni(refs.mesh.value),
-    nAngle: ni(refs.nAngle.value),
-    nDepth: ni(refs.nDepth.value),
+    mesh: clampInteger(ni(refs.mesh.value), ANALYSIS_LIMITS.mesh.min, ANALYSIS_LIMITS.mesh.max, ANALYSIS_LIMITS.mesh.fallback),
+    nAngle: clampInteger(ni(refs.nAngle.value), ANALYSIS_LIMITS.nAngle.min, ANALYSIS_LIMITS.nAngle.max, ANALYSIS_LIMITS.nAngle.fallback),
+    nDepth: clampInteger(ni(refs.nDepth.value), ANALYSIS_LIMITS.nDepth.min, ANALYSIS_LIMITS.nDepth.max, ANALYSIS_LIMITS.nDepth.fallback),
     phiP: n(refs.phiP.value),
     phiM: n(refs.phiM.value),
     pCutoffRatio: n(refs.pCutoffRatio.value),
@@ -4731,6 +4927,359 @@ function renderTable(results: ResultRow[]): void {
   }
 }
 
+function findGoverningResult(results: ResultRow[]): ResultRow | null {
+  const finite = results.filter((row) => Number.isFinite(row.dcr));
+  if (finite.length === 0) return results[0] ?? null;
+  return finite.reduce((worst, row) => (row.dcr > worst.dcr ? row : worst), finite[0]);
+}
+
+function findPrimaryComplianceIssue(checks: ComplianceCheck[]): ComplianceCheck | null {
+  return checks.find((row) => row.status === "fail")
+    ?? checks.find((row) => row.status === "info")
+    ?? checks[0]
+    ?? null;
+}
+
+function reportText(tr: string, en: string): string {
+  return state.lang === "en" ? en : tr;
+}
+
+function governingNarrative(result: ResultRow, issue: ComplianceCheck | null): string {
+  const label = result.name || reportText("Adsız yük", "Unnamed load");
+  const issueText = issue
+    ? reportText(
+      ` Birincil kod kontrolü: ${issue.code} ${issue.clause} - ${issue.description}.`,
+      ` Primary code check: ${issue.code} ${issue.clause} - ${issue.description}.`
+    )
+    : "";
+  if (result.ok) {
+    const reservePct = Number.isFinite(result.dcr) ? Math.max(0, (1 - result.dcr) * 100) : 0;
+    return reportText(
+      `${label} yükü bu analiz setini yönetiyor. DCR=${fmt(result.dcr, 4)} ve yaklaşık kalan marj %${fmt(reservePct, 1)}.${issueText}`,
+      `${label} governs the current load set. DCR=${fmt(result.dcr, 4)} with approximately ${fmt(reservePct, 1)}% remaining margin.${issueText}`
+    );
+  }
+  return reportText(
+    `${label} yükü belirleyici durumda ve kapasiteyi aşıyor. DCR=${fmt(result.dcr, 4)}.${issueText}`,
+    `${label} is governing and exceeds the available capacity. DCR=${fmt(result.dcr, 4)}.${issueText}`
+  );
+}
+
+function renderGoverningSummary(): void {
+  const governing = findGoverningResult(state.results);
+  if (!governing) {
+    refs.governingSummary.innerHTML = `<p class="governing-empty">${escapeHtml(reportText("Analiz çalıştırıldığında belirleyici yük burada özetlenecek.", "The governing load will be summarized here after analysis."))}</p>`;
+    return;
+  }
+
+  const issue = findPrimaryComplianceIssue(state.compliance);
+  const sectionName = state.sections[state.activeSectionIdx]?.name || reportText("Kesit", "Section");
+  const reserveText = Number.isFinite(governing.scale)
+    ? `${fmt(governing.scale, 4)}x`
+    : "-";
+  const issueLabel = issue ? `${issue.code} ${issue.clause}` : reportText("Ek kontrol yok", "No extra code trigger");
+
+  refs.governingSummary.innerHTML = `
+    <div class="governing-grid">
+      <article class="governing-card">
+        <span class="governing-label">${escapeHtml(reportText("Kesit", "Section"))}</span>
+        <strong class="governing-value">${escapeHtml(sectionName)}</strong>
+      </article>
+      <article class="governing-card">
+        <span class="governing-label">${escapeHtml(reportText("Belirleyici yük", "Governing load"))}</span>
+        <strong class="governing-value">${escapeHtml(governing.name || reportText("Adsız yük", "Unnamed load"))}</strong>
+      </article>
+      <article class="governing-card">
+        <span class="governing-label">DCR</span>
+        <strong class="governing-value">${Number.isFinite(governing.dcr) ? fmt(governing.dcr, 4) : "-"}</strong>
+      </article>
+      <article class="governing-card">
+        <span class="governing-label">${escapeHtml(reportText("Kapasite oranı", "Capacity ratio"))}</span>
+        <strong class="governing-value">${escapeHtml(reserveText)}</strong>
+      </article>
+      <article class="governing-card">
+        <span class="governing-label">${escapeHtml(reportText("Durum", "Status"))}</span>
+        <strong class="governing-value">${escapeHtml(governing.ok ? tx("resultOk") : tx("resultFail"))}</strong>
+      </article>
+      <article class="governing-card">
+        <span class="governing-label">${escapeHtml(reportText("Kod odağı", "Code focus"))}</span>
+        <strong class="governing-value">${escapeHtml(issueLabel)}</strong>
+      </article>
+    </div>
+    <p class="governing-note">${escapeHtml(governingNarrative(governing, issue))}</p>
+    ${issue ? `<div class="governing-issue"><strong>${escapeHtml(issue.code)} ${escapeHtml(issue.clause)}</strong><span>${escapeHtml(issue.description)}</span></div>` : ""}
+  `;
+}
+
+function resolveMcConcreteModel(input: AppInput): ConcreteModel {
+  if (input.codeMode === "ts500" || input.codeMode === "ts500_tbdy") {
+    return "mander_core_cover";
+  }
+  return input.concreteModel;
+}
+
+function formatMcConcreteModel(model: ConcreteModel): string {
+  if (state.lang === "en") {
+    return model === "mander_core_cover" ? "Mander core+cover (continuous)" : "TS500 block";
+  }
+  return model === "mander_core_cover" ? "Mander core+cover (sürekli)" : "TS500 eşdeğer blok";
+}
+
+function mcMonitoringLabel(key: string): string {
+  if (state.lang === "en") {
+    switch (key) {
+      case "top_cover": return "Top cover fibre";
+      case "core_top": return "Core top fibre";
+      case "bottom_fibre": return "Bottom tension fibre";
+      case "steel_tension": return "Critical tension steel";
+      case "steel_compression": return "Critical compression steel";
+      default: return key;
+    }
+  }
+  switch (key) {
+    case "top_cover": return "Üst cover lifi";
+    case "core_top": return "Confined core üst lifi";
+    case "bottom_fibre": return "Alt çekme lifi";
+    case "steel_tension": return "Kritik çekme donatısı";
+    case "steel_compression": return "Kritik basınç donatısı";
+    default: return key;
+  }
+}
+
+function mcEventLabel(key: keyof McEventFlags): string {
+  if (state.lang === "en") {
+    switch (key) {
+      case "firstKinkIdx": return "Kink";
+      case "steelYieldIdx": return "Yield";
+      case "peakIdx": return "Peak";
+      case "coverCrushIdx": return "Cover";
+      case "lastValidIdx": return "Last";
+    }
+  }
+  switch (key) {
+    case "firstKinkIdx": return "Kırılma";
+    case "steelYieldIdx": return "Akma";
+    case "peakIdx": return "Tepe";
+    case "coverCrushIdx": return "Cover";
+    case "lastValidIdx": return "Son";
+  }
+}
+
+function projectPoint(nx: number, ny: number, pt: XY): number {
+  return pt.x * nx + pt.y * ny;
+}
+
+function unitDirection(nx: number, ny: number): XY {
+  const len = Math.hypot(nx, ny) || 1;
+  return { x: nx / len, y: ny / len };
+}
+
+function buildSectionExtremePoint(input: SectionPreviewInput, nx: number, ny: number, extremum: "max" | "min"): XY {
+  const dir = unitDirection(nx, ny);
+  const sign = extremum === "max" ? 1 : -1;
+  if (input.shape === "circle") {
+    const r = 0.5 * input.diameterM;
+    return { x: sign * dir.x * r, y: sign * dir.y * r };
+  }
+  const hw = 0.5 * input.widthM;
+  const hh = 0.5 * input.heightM;
+  return {
+    x: sign * (dir.x >= 0 ? hw : -hw),
+    y: sign * (dir.y >= 0 ? hh : -hh),
+  };
+}
+
+function buildCoreExtremePoint(input: SectionPreviewInput, nx: number, ny: number): XY {
+  const dir = unitDirection(nx, ny);
+  const tieCenterEdge = input.coverToCenter
+    ? input.coverM - 0.5 * input.barDiaM
+    : input.coverM + 0.5 * input.tieDiaM;
+  if (input.shape === "circle") {
+    const r = Math.max(0, 0.5 * input.diameterM - tieCenterEdge);
+    return r > 0 ? { x: dir.x * r, y: dir.y * r } : buildSectionExtremePoint(input, nx, ny, "max");
+  }
+  const hw = Math.max(0, 0.5 * input.widthM - tieCenterEdge);
+  const hh = Math.max(0, 0.5 * input.heightM - tieCenterEdge);
+  return {
+    x: dir.x >= 0 ? hw : -hw,
+    y: dir.y >= 0 ? hh : -hh,
+  };
+}
+
+function buildMcMonitoring(input: AppInput, data: McData, angleDeg: number, strengths: McStrengths): McMonitoringPointSeries[] {
+  const sectionInput = sectionPreviewInputFromAppInput(input);
+  const layout = buildSectionRebarLayout(sectionInput);
+  const angleRad = (angleDeg * Math.PI) / 180;
+  const nx = Math.sin(angleRad);
+  const ny = Math.cos(angleRad);
+  const topCover = buildSectionExtremePoint(sectionInput, nx, ny, "max");
+  const bottomFibre = buildSectionExtremePoint(sectionInput, nx, ny, "min");
+  const coreTop = buildCoreExtremePoint(sectionInput, nx, ny);
+  const sMax = projectPoint(nx, ny, topCover);
+
+  const series: McMonitoringPointSeries[] = [
+    { key: "top_cover", label: mcMonitoringLabel("top_cover"), kind: "concrete", x: topCover.x, y: topCover.y, eps: [], sigmaMpa: [] },
+    { key: "core_top", label: mcMonitoringLabel("core_top"), kind: "concrete", x: coreTop.x, y: coreTop.y, eps: [], sigmaMpa: [] },
+    { key: "bottom_fibre", label: mcMonitoringLabel("bottom_fibre"), kind: "concrete", x: bottomFibre.x, y: bottomFibre.y, eps: [], sigmaMpa: [] },
+  ];
+
+  if (layout && layout.bars.length > 0) {
+    let tensionBar = layout.bars[0];
+    let compressionBar = layout.bars[0];
+    let minS = projectPoint(nx, ny, tensionBar);
+    let maxS = minS;
+    for (const bar of layout.bars) {
+      const s = projectPoint(nx, ny, bar);
+      if (s < minS) {
+        minS = s;
+        tensionBar = bar;
+      }
+      if (s > maxS) {
+        maxS = s;
+        compressionBar = bar;
+      }
+    }
+    series.push(
+      { key: "steel_tension", label: mcMonitoringLabel("steel_tension"), kind: "steel", x: tensionBar.x, y: tensionBar.y, eps: [], sigmaMpa: [] },
+      { key: "steel_compression", label: mcMonitoringLabel("steel_compression"), kind: "steel", x: compressionBar.x, y: compressionBar.y, eps: [], sigmaMpa: [] },
+    );
+  }
+
+  for (let i = 0; i < data.phi.length; i++) {
+    const phi = data.phi[i];
+    const c = data.neutralAxis[i];
+    for (const item of series) {
+      const s = projectPoint(nx, ny, item);
+      const eps = phi * (c - (sMax - s));
+      item.eps.push(eps);
+      if (item.kind === "steel") {
+        const sigma = clamp(eps * input.es, -strengths.fykMc, strengths.fykMc);
+        item.sigmaMpa.push(sigma);
+      } else {
+        item.sigmaMpa.push(Number.NaN);
+      }
+    }
+  }
+
+  return series;
+}
+
+function findMonitoringSeries(data: McData, key: string): McMonitoringPointSeries | undefined {
+  return data.monitoring.find((item) => item.key === key);
+}
+
+function computeMcEventFlags(data: McData, input: AppInput, strengths: McStrengths): McEventFlags {
+  const n = data.phi.length;
+  let peakIdx = 0;
+  for (let i = 1; i < n; i++) {
+    if (data.moment[i] > data.moment[peakIdx]) peakIdx = i;
+  }
+
+  let firstKinkIdx = -1;
+  let refSlope = 0;
+  for (let i = 1; i < Math.min(5, n); i++) {
+    const dPhi = data.phi[i] - data.phi[i - 1];
+    if (dPhi <= 0) continue;
+    refSlope = Math.max(refSlope, (data.moment[i] - data.moment[i - 1]) / dPhi);
+  }
+  if (refSlope > 0) {
+    for (let i = 2; i <= peakIdx; i++) {
+      const dPhi = data.phi[i] - data.phi[i - 1];
+      if (dPhi <= 0) continue;
+      const slope = (data.moment[i] - data.moment[i - 1]) / dPhi;
+      if (slope < refSlope * 0.72 && data.moment[i] > data.moment[peakIdx] * 0.2) {
+        firstKinkIdx = i;
+        break;
+      }
+    }
+  }
+
+  const epsY = strengths.fykMc / input.es;
+  let steelYieldIdx = -1;
+  const tensionSteel = findMonitoringSeries(data, "steel_tension");
+  const compressionSteel = findMonitoringSeries(data, "steel_compression");
+  for (let i = 0; i < n; i++) {
+    const tensionYield = tensionSteel ? Math.abs(tensionSteel.eps[i]) >= epsY : false;
+    const compressionYield = compressionSteel ? Math.abs(compressionSteel.eps[i]) >= epsY : false;
+    if (tensionYield || compressionYield) {
+      steelYieldIdx = i;
+      break;
+    }
+  }
+
+  let coverCrushIdx = -1;
+  const coverTop = findMonitoringSeries(data, "top_cover");
+  const coverLimit = Math.max(input.epsCu, 0.003) * 0.85;
+  if (coverTop) {
+    for (let i = 0; i < n; i++) {
+      if (coverTop.eps[i] >= coverLimit) {
+        coverCrushIdx = i;
+        break;
+      }
+    }
+  }
+
+  return {
+    firstKinkIdx,
+    steelYieldIdx,
+    peakIdx,
+    coverCrushIdx,
+    lastValidIdx: Math.max(0, n - 1),
+  };
+}
+
+function buildMcEventIndexMap(flags: McEventFlags): Map<number, string[]> {
+  const map = new Map<number, string[]>();
+  const push = (idx: number, key: keyof McEventFlags): void => {
+    if (idx < 0) return;
+    const labels = map.get(idx) ?? [];
+    labels.push(mcEventLabel(key));
+    map.set(idx, labels);
+  };
+  push(flags.firstKinkIdx, "firstKinkIdx");
+  push(flags.steelYieldIdx, "steelYieldIdx");
+  push(flags.peakIdx, "peakIdx");
+  push(flags.coverCrushIdx, "coverCrushIdx");
+  push(flags.lastValidIdx, "lastValidIdx");
+  return map;
+}
+
+function formatMcMissRanges(ranges: McPhiRange[]): string {
+  if (ranges.length === 0) {
+    return state.lang === "en" ? "none" : "yok";
+  }
+  return ranges.slice(0, 3).map((range) => `${range.start.toExponential(2)}→${range.end.toExponential(2)}`).join(", ");
+}
+
+function estimateMcCompressionCapacityKn(pSignFactor: number): number | null {
+  if (state.surface.length === 0) return null;
+  const values = state.surface
+    .map((point) => point.p * pSignFactor)
+    .filter((value) => Number.isFinite(value));
+  if (values.length === 0) return null;
+  return Math.max(...values);
+}
+
+function buildMcSparklineSvg(data: McData, color: string): string {
+  if (data.phi.length === 0) return "";
+  const width = 150;
+  const height = 58;
+  const padX = 6;
+  const padY = 6;
+  const xMin = Math.min(...data.phi);
+  const xMax = Math.max(...data.phi);
+  const yMin = 0;
+  const yMax = Math.max(...data.moment);
+  const points = data.phi.map((x, i) => {
+    const px = padX + ((x - xMin) / Math.max(1e-12, xMax - xMin)) * (width - padX * 2);
+    const py = height - padY - ((data.moment[i] - yMin) / Math.max(1e-12, yMax - yMin)) * (height - padY * 2);
+    return `${px.toFixed(1)},${py.toFixed(1)}`;
+  }).join(" ");
+  return `<svg viewBox="0 0 ${width} ${height}" class="mc-batch-spark" aria-hidden="true">
+    <polyline fill="none" stroke="${color}" stroke-width="2" points="${points}" />
+  </svg>`;
+}
+
 function renderCompliance(checks: ComplianceCheck[]): void {
   refs.complianceBody.innerHTML = "";
   const passCount = checks.filter((c) => c.status === "pass").length;
@@ -4968,6 +5517,7 @@ function renderPlot3d(surface: PmmPoint[], results: ResultRow[]): void {
 
   if (shellPointCount <= 0 || surface.length < shellPointCount) {
     host.innerHTML = "";
+    host.removeAttribute("aria-busy");
     return;
   }
 
@@ -5006,6 +5556,7 @@ function renderPlot3d(surface: PmmPoint[], results: ResultRow[]): void {
   const designGrid = buildSurfaceGrid(surface);
   if (!designGrid) {
     host.innerHTML = "";
+    host.removeAttribute("aria-busy");
     return;
   }
 
@@ -5091,11 +5642,16 @@ function renderPlot3d(surface: PmmPoint[], results: ResultRow[]): void {
   const sceneColor = state.theme === "light" ? "#17323d" : "#cde6eb";
   const sceneGrid = state.theme === "light" ? "rgba(41, 74, 88, 0.18)" : "rgba(159, 197, 202, 0.20)";
   const sceneZero = state.theme === "light" ? "rgba(183, 112, 56, 0.45)" : "rgba(249, 177, 112, 0.45)";
+  const hostWidth = Math.max(0, Math.round(host.getBoundingClientRect().width || host.clientWidth));
+  const hostHeight = Math.max(360, Math.round(host.getBoundingClientRect().height || host.clientHeight || 520));
   const zTitle = state.lang === "en"
     ? (pSignFactor < 0 ? "P (kN) [compression -]" : "P (kN) [compression +]")
     : (pSignFactor < 0 ? "P (kN) [basınç -]" : "P (kN) [basınç +]");
 
   const layout = {
+    autosize: true,
+    width: hostWidth > 0 ? hostWidth : undefined,
+    height: hostHeight,
     margin: { l: 0, r: 0, t: 0, b: 0 },
     paper_bgcolor: "rgba(0,0,0,0)",
     scene: {
@@ -5132,11 +5688,29 @@ function renderPlot3d(surface: PmmPoint[], results: ResultRow[]): void {
     scrollZoom: true,
   };
 
-  try {
-    (Plotly as any).react(host, traces, layout, config);
-  } catch (error) {
-    host.textContent = `${tx("plot3dError")}: ${String(error)}`;
-  }
+  showPlotLoading(host);
+  void ensurePlotly()
+    .then((plotly) => {
+      if (host.childElementCount === 0) host.textContent = "";
+      void renderPlotlyFigure(plotly as any, host, traces, layout, config).then(() => {
+        try {
+          (plotly as any).Plots?.resize?.(host);
+        } catch {
+          // Keep the 3D panel usable even if resize hooks are unavailable.
+        }
+        host.removeAttribute("aria-busy");
+        host.removeAttribute("aria-label");
+      }).catch((error) => {
+        host.removeAttribute("aria-busy");
+        host.removeAttribute("aria-label");
+        host.textContent = `${tx("plot3dError")}: ${String(error)}`;
+      });
+    })
+    .catch((error) => {
+      host.removeAttribute("aria-busy");
+      host.removeAttribute("aria-label");
+      host.textContent = `${tx("plot3dError")}: ${String(error)}`;
+    });
 }
 function normalizeDeg(v: number): number {
   if (!Number.isFinite(v)) return 0;
@@ -5411,7 +5985,7 @@ function fmtAxis(v: number, step: number): string {
   if (s < 0.1) digits = 2;
   if (s < 0.01) digits = 3;
   const value = Math.abs(v) < s * 1e-6 ? 0 : v;
-  return value.toLocaleString("en-US", {
+  return value.toLocaleString(currentLocale(), {
     maximumFractionDigits: digits,
     minimumFractionDigits: 0,
   });
@@ -5434,6 +6008,7 @@ function labelsForProjection(projection: string): [string, string] {
 }
 
 async function parseLoadsCsvFile(file: File): Promise<LoadCase[]> {
+  assertFileSizeWithinLimit(file, LOADS_CSV_MAX_BYTES, tx("statusLoadSheetFileTooLarge"));
   const text = await file.text();
   const lines = text
     .split(/\r?\n/)
@@ -5462,6 +6037,9 @@ async function parseLoadsCsvFile(file: File): Promise<LoadCase[]> {
       muy: n(parts[idxMy]),
     });
   }
+  if (out.length > LOAD_SHEET_MAX_NON_EMPTY_ROWS) {
+    throw new Error(tx("statusLoadSheetTooManyRows"));
+  }
   return out;
 }
 
@@ -5477,16 +6055,16 @@ function exportResultsCsv(): void {
     "name,Pu_kN,Mux_kNm,Muy_kNm,Pcap_kN,Mxcap_kNm,Mycap_kNm,scale,dcr,ok",
     ...state.results.map((r) =>
       [
-        r.name,
-        r.pu,
-        r.mux,
-        r.muy,
-        r.pcap,
-        r.mxcap,
-        r.mycap,
-        r.scale,
-        r.dcr,
-        r.ok ? "1" : "0",
+        toCsvCell(r.name),
+        toCsvCell(r.pu),
+        toCsvCell(r.mux),
+        toCsvCell(r.muy),
+        toCsvCell(r.pcap),
+        toCsvCell(r.mxcap),
+        toCsvCell(r.mycap),
+        toCsvCell(r.scale),
+        toCsvCell(r.dcr),
+        toCsvCell(r.ok ? "1" : "0"),
       ].join(",")
     ),
   ];
@@ -5638,20 +6216,32 @@ function computeMcDataAtAngle(
   const angleRad = (angleDeg * Math.PI) / 180;
   const nx = Math.sin(angleRad);
   const ny = Math.cos(angleRad);
-  const strengths = resolveDesignStrengths(input);
+  const strengths = resolveMcStrengths(input);
   const barDiaM = input.barDiaMm / 1000.0;
-  const count = wasm.buildMomentCurvature(
-    pKn,
-    nx,
-    ny,
-    nSteps,
-    strengths.fckPmm,
-    strengths.fykPmm,
-    input.gammaC,
-    input.gammaS,
-    input.es,
-    barDiaM
-  );
+  const tieSpacingConfM = input.tieSpacingConfMm / 1000.0;
+  const baseConcreteModelId = input.concreteModel === "mander_core_cover" ? 1 : 0;
+  const effectiveConcreteModel = resolveMcConcreteModel(input);
+  const mcConcreteModelId = effectiveConcreteModel === "mander_core_cover" ? 1 : 0;
+  wasm.setConcreteModel(mcConcreteModelId, tieSpacingConfM);
+  let count = 0;
+  try {
+    count = wasm.buildMomentCurvature(
+      pKn,
+      nx,
+      ny,
+      nSteps,
+      strengths.fckMc,
+      strengths.fykMc,
+      strengths.gammaCMc,
+      strengths.gammaSMc,
+      input.es,
+      barDiaM
+    );
+  } finally {
+    if (mcConcreteModelId !== baseConcreteModelId) {
+      wasm.setConcreteModel(baseConcreteModelId, tieSpacingConfM);
+    }
+  }
   if (count === 0) {
     throw new Error(tx("statusMcNoPoints"));
   }
@@ -5661,6 +6251,7 @@ function computeMcDataAtAngle(
   const tempNA: number[] = [];
   const tempEpsC: number[] = [];
   const tempEpsS: number[] = [];
+  const missRanges: McPhiRange[] = [];
   for (let i = 0; i < count; i++) {
     const m = wasm.getMcMoment(i);
     tempPhi.push(wasm.getMcPhi(i));
@@ -5668,6 +6259,13 @@ function computeMcDataAtAngle(
     tempNA.push(wasm.getMcNeutralAxis(i));
     tempEpsC.push(wasm.getMcEpsC(i));
     tempEpsS.push(wasm.getMcEpsS(i));
+  }
+  const missRangeCount = wasm.getMcMissRangeCount();
+  for (let i = 0; i < missRangeCount; i++) {
+    missRanges.push({
+      start: wasm.getMcMissRangeStart(i),
+      end: wasm.getMcMissRangeEnd(i),
+    });
   }
 
   const phi: number[] = [];
@@ -5684,6 +6282,38 @@ function computeMcDataAtAngle(
     epsS.push(tempEpsS[i]);
   }
 
+  const diagnostics: McDiagnostics = {
+    rootNotFoundCount: wasm.getMcRootNotFoundCount(),
+    nearMissAcceptedCount: wasm.getMcNearMissAcceptedCount(),
+    missRanges,
+  };
+  const monitoring = buildMcMonitoring(input, {
+    phi,
+    moment,
+    neutralAxis,
+    epsC,
+    epsS,
+    requestedSteps: nSteps,
+    solvedSteps: count,
+    effectiveConcreteModel,
+    diagnostics: { rootNotFoundCount: 0, nearMissAcceptedCount: 0, missRanges: [] },
+    flags: { firstKinkIdx: -1, steelYieldIdx: -1, peakIdx: -1, coverCrushIdx: -1, lastValidIdx: Math.max(0, phi.length - 1) },
+    monitoring: [],
+  }, angleDeg, strengths);
+  const flags = computeMcEventFlags({
+    phi,
+    moment,
+    neutralAxis,
+    epsC,
+    epsS,
+    requestedSteps: nSteps,
+    solvedSteps: count,
+    effectiveConcreteModel,
+    diagnostics,
+    flags: { firstKinkIdx: -1, steelYieldIdx: -1, peakIdx: -1, coverCrushIdx: -1, lastValidIdx: Math.max(0, phi.length - 1) },
+    monitoring,
+  }, input, strengths);
+
   return {
     phi,
     moment,
@@ -5692,6 +6322,10 @@ function computeMcDataAtAngle(
     epsS,
     requestedSteps: nSteps,
     solvedSteps: count,
+    effectiveConcreteModel,
+    diagnostics,
+    flags,
+    monitoring,
   };
 }
 
@@ -5703,15 +6337,53 @@ async function runMomentCurvature(): Promise<void> {
 
   setStatus(tx("statusMcRunning"), "info");
 
-  const input = state.lastInput;
-  const pSignFactor = readCurrentPSignFactor();
-  const pKnRaw = Number(refs.mcP.value.trim().replace(",", "."));
-  if (!Number.isFinite(pKnRaw)) throw new Error(tx("statusMcNoPmm"));
-  const angleDeg = Number(refs.mcAngle.value.trim().replace(",", ".")) || 0;
-  const nSteps = Math.max(20, Math.min(2000, Math.round(Number(refs.mcSteps.value) || 80)));
-  state.mcData = computeMcDataAtAngle(wasm, input, pKnRaw, angleDeg, nSteps, pSignFactor);
-  renderMcPlot(state.mcData);
-  setStatus(tx("statusMcDone"), "info");
+  try {
+    const input = state.lastInput;
+    const pSignFactor = readCurrentPSignFactor();
+    const pKnRaw = Number(refs.mcP.value.trim().replace(",", "."));
+    if (!Number.isFinite(pKnRaw)) throw new Error(tx("statusMcNoPmm"));
+
+    const maxCompressionKn = estimateMcCompressionCapacityKn(pSignFactor);
+    const maxMcCompressionFactor = 4.0;
+    if (maxCompressionKn != null && pKnRaw > maxCompressionKn * maxMcCompressionFactor) {
+      throw new Error(
+        state.lang === "en"
+          ? `Requested P=${fmt(pKnRaw, 1)} kN exceeds the temporary M–φ limit of ~${fmt(maxCompressionKn * maxMcCompressionFactor, 1)} kN (4× current PMM compression envelope, base ~${fmt(maxCompressionKn, 1)} kN).`
+          : `İstenen P=${fmt(pKnRaw, 1)} kN, geçici M-φ sınırını aşıyor: ~${fmt(maxCompressionKn * maxMcCompressionFactor, 1)} kN (mevcut PMM basınç zarfının 4 katı, temel zarf ~${fmt(maxCompressionKn, 1)} kN).`
+      );
+    }
+
+    const angleDeg = Number(refs.mcAngle.value.trim().replace(",", ".")) || 0;
+    const nSteps = Math.max(20, Math.min(2000, Math.round(Number(refs.mcSteps.value) || 80)));
+    const mcData = computeMcDataAtAngle(wasm, input, pKnRaw, angleDeg, nSteps, pSignFactor);
+    const batchAngles = [0, 45, 90];
+    const mcBatchData = batchAngles.map((batchAngle) => {
+      if (Math.abs(normalizeDeg(angleDeg) - batchAngle) < 1e-9) {
+        return { angleDeg: batchAngle, data: mcData, error: null };
+      }
+      try {
+        return {
+          angleDeg: batchAngle,
+          data: computeMcDataAtAngle(wasm, input, pKnRaw, batchAngle, nSteps, pSignFactor),
+          error: null,
+        };
+      } catch (error) {
+        return {
+          angleDeg: batchAngle,
+          data: null,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    });
+    state.mcData = mcData;
+    state.mcBatchData = mcBatchData;
+    renderMcPlot(mcData);
+    renderMcBatchComparison(mcBatchData, angleDeg);
+    setStatus(tx("statusMcDone"), "info");
+  } catch (error) {
+    clearMomentCurvatureOutputs();
+    throw error;
+  }
 }
 
 interface McKeyPoints {
@@ -5760,11 +6432,19 @@ function renderMcPlot(data: McData): void {
   const host = refs.plotMc;
   const statsDiv = refs.mcStats;
   const { phi, moment } = data;
-  if (phi.length === 0) { host.innerHTML = ""; return; }
+  if (phi.length === 0) {
+    host.innerHTML = "";
+    host.removeAttribute("aria-busy");
+    return;
+  }
+  const includeOriginAnchor = phi[0] > 1e-12 || Math.abs(moment[0]) > 1e-9;
+  const curvePhi = includeOriginAnchor ? [0, ...phi] : phi;
+  const curveMoment = includeOriginAnchor ? [0, ...moment] : moment;
 
   const pSignFactor = readCurrentPSignFactor();
   // Format phi in units of 1/m (no conversion needed — already rad/m)
   const keyPts = computeMcKeyPoints(phi, moment);
+  const eventMap = buildMcEventIndexMap(data.flags);
 
   const sceneBg = state.theme === "light" ? "#fbfdff" : "#0a1117";
   const lineColor = state.theme === "light" ? "#0f7f93" : "#5be7ff";
@@ -5781,8 +6461,8 @@ function renderMcPlot(data: McData): void {
   const curveTrace = {
     type: "scatter",
     mode: "lines",
-    x: phi,
-    y: moment,
+    x: curvePhi,
+    y: curveMoment,
     name: state.lang === "en" ? "M–φ curve" : "M–φ eğrisi",
     line: { color: lineColor, width: 2.5 },
     hovertemplate: `φ: %{x:.5f} 1/m<br>M: %{y:.1f} kNm<extra></extra>`,
@@ -5795,9 +6475,10 @@ function renderMcPlot(data: McData): void {
     y: [keyPts.mu],
     name: state.lang === "en" ? "Peak (Mu)" : "Tepe (Mu)",
     text: [`Mu=${fmt(keyPts.mu, 1)} kNm`],
-    textposition: "top right",
+    textposition: isFullscreen ? "top left" : "top right",
     textfont: { color: peakColor, size: 11 },
     marker: { color: peakColor, size: 10, symbol: "diamond" },
+    cliponaxis: false,
     hovertemplate: `Mu: %{y:.1f} kNm<br>φ_peak: %{x:.5f}<extra></extra>`,
   };
 
@@ -5819,10 +6500,51 @@ function renderMcPlot(data: McData): void {
     y: [keyPts.mu],
     name: state.lang === "en" ? "Yield (φy)" : "Akma (φy)",
     text: [`φy=${keyPts.phiY.toExponential(3)}`],
-    textposition: "bottom right",
+    textposition: isFullscreen ? "bottom left" : "bottom right",
     textfont: { color: yieldColor, size: 11 },
     marker: { color: yieldColor, size: 9, symbol: "circle" },
+    cliponaxis: false,
     hovertemplate: `φy: %{x:.5f}<br>M(İdealize): %{y:.1f} kNm<extra></extra>`,
+  };
+
+  const eventEntries = Array.from(eventMap.entries()).sort((a, b) => a[0] - b[0]);
+  const eventText = eventEntries.map(([, labels]) =>
+    labels.filter((label) => label !== mcEventLabel("peakIdx") && label !== mcEventLabel("steelYieldIdx")).join(" · ")
+  );
+  const eventTrace = {
+    type: "scatter",
+    mode: isFullscreen ? "markers" : "markers+text",
+    x: eventEntries.map(([idx]) => phi[idx]),
+    y: eventEntries.map(([idx]) => moment[idx]),
+    text: eventText,
+    textposition: eventEntries.map(([, labels]) =>
+      labels.includes(mcEventLabel("firstKinkIdx")) ? "top left"
+        : labels.includes(mcEventLabel("coverCrushIdx")) ? "bottom left"
+        : labels.includes(mcEventLabel("lastValidIdx")) ? "top right"
+        : "top center"
+    ),
+    textfont: { color: textColor, size: 10 },
+    marker: {
+      size: 9,
+      color: eventEntries.map(([, labels]) => {
+        if (labels.includes(mcEventLabel("peakIdx"))) return peakColor;
+        if (labels.includes(mcEventLabel("steelYieldIdx"))) return yieldColor;
+        if (labels.includes(mcEventLabel("coverCrushIdx"))) return "#c67b19";
+        if (labels.includes(mcEventLabel("lastValidIdx"))) return "#7a7f87";
+        return "#8a63d2";
+      }),
+      symbol: eventEntries.map(([, labels]) => {
+        if (labels.includes(mcEventLabel("peakIdx"))) return "diamond";
+        if (labels.includes(mcEventLabel("steelYieldIdx"))) return "circle";
+        if (labels.includes(mcEventLabel("coverCrushIdx"))) return "triangle-up";
+        if (labels.includes(mcEventLabel("lastValidIdx"))) return "square";
+        return "x";
+      }),
+      line: { color: sceneBg, width: 1.5 },
+    },
+    cliponaxis: false,
+    showlegend: false,
+    hovertemplate: `%{text}<br>φ: %{x:.5f} 1/m<br>M: %{y:.1f} kNm<extra></extra>`,
   };
 
   const activeIdx = phi.length > 0 ? phi.length - 1 : 0;
@@ -5845,7 +6567,7 @@ function renderMcPlot(data: McData): void {
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: sceneBg,
     height: mcPlotHeightPx(),
-    margin: { l: 64, r: 18, t: 18, b: isFullscreen ? 46 : 34 },
+    margin: { l: 64, r: isFullscreen ? 30 : 18, t: isFullscreen ? 34 : 24, b: isFullscreen ? 48 : 36 },
     xaxis: {
       title: { text: phiLabel, font: { color: textColor } },
       color: textColor,
@@ -5872,33 +6594,44 @@ function renderMcPlot(data: McData): void {
     font: { color: textColor },
   };
 
-  const config = { responsive: true, displaylogo: false, scrollZoom: false };
+  const config = { responsive: true, displaylogo: false, displayModeBar: false, scrollZoom: false };
 
-  try {
-    (Plotly as any).react(host, [curveTrace, bilinearTrace, peakTrace, yieldTrace, activeTrace], layout, config);
-
-    // Hover sync: update strain diagram on hover
-    // Hover sync: update strain diagram on hover
-    (host as any).removeAllListeners?.("plotly_hover");
-    (host as any).on("plotly_hover", (ev: any) => {
-      if (!ev || !ev.points || ev.points.length === 0) return;
-      const pt = ev.points[0];
-      if (pt.curveNumber !== 0) return; // only on main curve
-      const idx = pt.pointIndex as number;
-      if (state.mcData) {
-        selectMcPoint(state.mcData, idx);
-      }
+  showPlotLoading(host);
+  void ensurePlotly()
+    .then((plotly) => {
+      if (host.childElementCount === 0) host.textContent = "";
+      void renderPlotlyFigure(plotly as any, host, [curveTrace, bilinearTrace, peakTrace, yieldTrace, eventTrace, activeTrace], layout, config).then(() => {
+        (host as any).removeAllListeners?.("plotly_hover");
+        (host as any).on("plotly_hover", (ev: any) => {
+          if (!ev || !ev.points || ev.points.length === 0) return;
+          const pt = ev.points[0];
+          if (pt.curveNumber !== 0) return;
+          let idx = pt.pointIndex as number;
+          if (includeOriginAnchor) {
+            if (idx === 0) return;
+            idx -= 1;
+          }
+          if (state.mcData) {
+            selectMcPoint(state.mcData, idx);
+          }
+        });
+        if (data.phi.length > 0) {
+          const lastIdx = data.phi.length - 1;
+          selectMcPoint(data, lastIdx);
+        }
+        host.removeAttribute("aria-busy");
+        host.removeAttribute("aria-label");
+      }).catch((e) => {
+        host.removeAttribute("aria-busy");
+        host.removeAttribute("aria-label");
+        host.textContent = String(e);
+      });
+    })
+    .catch((error) => {
+      host.removeAttribute("aria-busy");
+      host.removeAttribute("aria-label");
+      host.textContent = String(error);
     });
-
-    // Render strain diagram for last point by default
-    if (data.phi.length > 0) {
-      const lastIdx = data.phi.length - 1;
-      selectMcPoint(data, lastIdx);
-    }
-  } catch (e) {
-    host.textContent = String(e);
-    return;
-  }
 
   // Stats box
   const pUser = Number(refs.mcP.value) * pSignFactor;
@@ -5909,15 +6642,22 @@ function renderMcPlot(data: McData): void {
   const countLabel = state.lang === "en"
     ? `Requested steps: ${data.requestedSteps} · Valid solutions: ${data.solvedSteps} · Shown points: ${data.phi.length}`
     : `İstenen adım: ${data.requestedSteps} · Geçerli çözüm: ${data.solvedSteps} · Gösterilen nokta: ${data.phi.length}`;
+  const concreteModelLabel = formatMcConcreteModel(data.effectiveConcreteModel);
+  const diagnosticsLabel = state.lang === "en"
+    ? `No-root: ${data.diagnostics.rootNotFoundCount} · Near-miss: ${data.diagnostics.nearMissAcceptedCount} · φ gaps: ${formatMcMissRanges(data.diagnostics.missRanges)}`
+    : `Kök yok: ${data.diagnostics.rootNotFoundCount} · Near-miss: ${data.diagnostics.nearMissAcceptedCount} · φ boşlukları: ${formatMcMissRanges(data.diagnostics.missRanges)}`;
 
   statsDiv.innerHTML = `
     <p class="mc-stats-meta">${escapeHtml(pLabel)}</p>
     <p class="mc-stats-counts">${escapeHtml(countLabel)}</p>
+    <p class="mc-stats-meta">${escapeHtml(diagnosticsLabel)}</p>
+    <p class="mc-stats-meta">${escapeHtml(tx("mcStatsMethodNote"))}</p>
     <div class="mc-stats-grid">
       <span class="mc-stat-label">${tx("mcStatsMu")}</span><span class="mc-stat-value">${fmt(keyPts.mu, 1)} kNm</span>
       <span class="mc-stat-label">${tx("mcStatsPhiU")}</span><span class="mc-stat-value">${keyPts.phiU.toExponential(4)} 1/m</span>
       <span class="mc-stat-label">${tx("mcStatsPhiY")}</span><span class="mc-stat-value">${keyPts.phiY.toExponential(4)} 1/m</span>
       <span class="mc-stat-label">${tx("mcStatsDuctility")}</span><span class="mc-stat-value">${fmt(keyPts.ductility, 2)}</span>
+      <span class="mc-stat-label">${tx("mcStatsConcreteModel")}</span><span class="mc-stat-value">${escapeHtml(concreteModelLabel)}</span>
     </div>
   `;
   statsDiv.classList.remove("hidden");
@@ -5925,15 +6665,110 @@ function renderMcPlot(data: McData): void {
   // Render data table
   const defaultIdx = data.phi.length > 0 ? data.phi.length - 1 : -1;
   renderMcDataTable(data, defaultIdx);
+  renderMcMonitoring(data, defaultIdx);
   resizeMcPlotsDeferred(0);
+}
+
+function renderMcMonitoring(data: McData, idx: number): void {
+  const container = refs.mcMonitoring;
+  if (!container || idx < 0 || idx >= data.phi.length) {
+    container?.classList.add("hidden");
+    return;
+  }
+  const items = data.monitoring.map((item) => {
+    const eps = item.eps[idx];
+    const sigma = item.sigmaMpa[idx];
+    const sigmaText = Number.isFinite(sigma)
+      ? `${state.lang === "en" ? "σ" : "σ"} = ${fmt(sigma, 1)} MPa`
+      : state.lang === "en" ? "σ = —" : "σ = —";
+    return `
+      <div class="mc-monitor-item">
+        <div class="mc-monitor-label">${escapeHtml(item.label)}</div>
+        <div class="mc-monitor-eps">ε = ${escapeHtml(eps.toExponential(3))}</div>
+        <div class="mc-monitor-sigma">${escapeHtml(sigmaText)}</div>
+      </div>
+    `;
+  }).join("");
+  const title = state.lang === "en"
+    ? "Monitoring points at selected step"
+    : "Seçili adımda izleme noktaları";
+  container.innerHTML = `
+    <div class="mc-monitor-title">${escapeHtml(title)}</div>
+    <div class="mc-monitor-grid">${items}</div>
+  `;
+  container.classList.remove("hidden");
+}
+
+function renderMcBatchComparison(curves: McBatchCurve[], currentAngleDeg: number): void {
+  const container = refs.mcBatch;
+  if (!container || curves.length === 0) {
+    container?.classList.add("hidden");
+    return;
+  }
+  const summary = curves.map((curve) => {
+    const isActive = Math.abs(normalizeDeg(currentAngleDeg) - normalizeDeg(curve.angleDeg)) < 1e-9;
+    if (!curve.data) {
+      return `
+        <span class="mc-batch-chip${isActive ? " active" : ""}">
+          <span class="mc-batch-chip-angle">${curve.angleDeg}°</span>
+          <span class="mc-batch-chip-meta">${escapeHtml(curve.error ?? (state.lang === "en" ? "No curve" : "Eğri yok"))}</span>
+        </span>
+      `;
+    }
+    const keyPts = computeMcKeyPoints(curve.data.phi, curve.data.moment);
+    const label = state.lang === "en"
+      ? `${curve.data.solvedSteps}/${curve.data.requestedSteps} solved`
+      : `${curve.data.solvedSteps}/${curve.data.requestedSteps} çözüm`;
+    return `
+      <span class="mc-batch-chip${isActive ? " active" : ""}">
+        <span class="mc-batch-chip-angle">${curve.angleDeg}°</span>
+        <span class="mc-batch-chip-meta">${escapeHtml(label)} · Mu ${escapeHtml(fmt(keyPts.mu, 1))}</span>
+      </span>
+    `;
+  }).join("");
+  const cards = curves.map((curve) => {
+    const isActive = Math.abs(normalizeDeg(currentAngleDeg) - normalizeDeg(curve.angleDeg)) < 1e-9;
+    if (!curve.data) {
+      return `
+        <article class="mc-batch-card${isActive ? " active" : ""}">
+          <div class="mc-batch-head">${curve.angleDeg}°</div>
+          <div class="mc-batch-empty">${escapeHtml(curve.error ?? (state.lang === "en" ? "No curve" : "Eğri yok"))}</div>
+        </article>
+      `;
+    }
+    const keyPts = computeMcKeyPoints(curve.data.phi, curve.data.moment);
+    const color = curve.angleDeg === 0 ? "#0f7f93" : curve.angleDeg === 45 ? "#8a63d2" : "#c67b19";
+    const label = state.lang === "en"
+      ? `${curve.data.solvedSteps}/${curve.data.requestedSteps} solved`
+      : `${curve.data.solvedSteps}/${curve.data.requestedSteps} çözüm`;
+    return `
+      <article class="mc-batch-card${isActive ? " active" : ""}">
+        <div class="mc-batch-head">${curve.angleDeg}°</div>
+        ${buildMcSparklineSvg(curve.data, color)}
+        <div class="mc-batch-meta">${escapeHtml(label)}</div>
+        <div class="mc-batch-meta">Mu = ${escapeHtml(fmt(keyPts.mu, 1))} kNm</div>
+        <div class="mc-batch-meta">φu = ${escapeHtml(keyPts.phiU.toExponential(2))}</div>
+      </article>
+    `;
+  }).join("");
+  const title = state.lang === "en"
+    ? "Batch M–φ comparison (0° / 45° / 90°)"
+    : "Toplu M–φ karşılaştırması (0° / 45° / 90°)";
+  container.innerHTML = `
+    <div class="mc-batch-title">${escapeHtml(title)}</div>
+    <div class="mc-batch-summary">${summary}</div>
+    <div class="mc-batch-grid">${cards}</div>
+  `;
+  container.classList.remove("hidden");
 }
 
 function renderMcDataTable(data: McData, activeIdx = -1): void {
   const container = refs.mcDataTable;
   if (!container) return;
   const metaText = state.lang === "en"
-    ? `${data.solvedSteps} / ${data.requestedSteps} valid solution points`
-    : `${data.solvedSteps} / ${data.requestedSteps} çözüm noktası`;
+    ? `${data.solvedSteps} / ${data.requestedSteps} valid solution points · no-root ${data.diagnostics.rootNotFoundCount} · near-miss ${data.diagnostics.nearMissAcceptedCount}`
+    : `${data.solvedSteps} / ${data.requestedSteps} çözüm noktası · kök yok ${data.diagnostics.rootNotFoundCount} · near-miss ${data.diagnostics.nearMissAcceptedCount}`;
+  const eventMap = buildMcEventIndexMap(data.flags);
   const rows = data.phi.map((phi, i) =>
     `<tr data-mc-row="${i}" class="${i === activeIdx ? "active" : ""}">
       <td>${i + 1}</td>
@@ -5942,6 +6777,7 @@ function renderMcDataTable(data: McData, activeIdx = -1): void {
       <td>${(data.neutralAxis[i] * 1000).toFixed(1)}</td>
       <td>${data.epsC[i].toExponential(3)}</td>
       <td>${data.epsS[i].toExponential(3)}</td>
+      <td>${escapeHtml((eventMap.get(i) ?? []).join(" · "))}</td>
     </tr>`
   ).join("");
   container.innerHTML = `
@@ -5955,6 +6791,7 @@ function renderMcDataTable(data: McData, activeIdx = -1): void {
           <th>NA (mm)</th>
           <th>ε<sub>c</sub></th>
           <th>ε<sub>s</sub></th>
+          <th>Evt</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -5984,14 +6821,20 @@ function syncMcTableHighlight(idx: number): void {
 
 function updateMcCurveHighlight(data: McData, idx: number): void {
   if (idx < 0 || idx >= data.phi.length) return;
-  try {
-    (Plotly as any).restyle(refs.plotMc, {
-      x: [[data.phi[idx]]],
-      y: [[data.moment[idx]]],
-    }, [4]);
-  } catch {
-    // Plot may not be ready during early transitions.
-  }
+  void ensurePlotly()
+    .then((plotly) => {
+      try {
+        (plotly as any).restyle(refs.plotMc, {
+          x: [[data.phi[idx]]],
+          y: [[data.moment[idx]]],
+        }, [5]);
+      } catch {
+        // Plot may not be ready during early transitions.
+      }
+    })
+    .catch(() => {
+      // Plotly chunk may still be loading during early transitions.
+    });
 }
 
 function selectMcPoint(data: McData, idx: number): void {
@@ -5999,6 +6842,7 @@ function selectMcPoint(data: McData, idx: number): void {
   updateMcHoverInfo(data, idx);
   updateMcCurveHighlight(data, idx);
   renderStrainDiagram(data, idx);
+  renderMcMonitoring(data, idx);
 }
 
 function collectReportMeta(): ReportMeta {
@@ -6012,7 +6856,7 @@ function collectReportMeta(): ReportMeta {
     checkedBy: refs.reportCheckedBy.value.trim(),
     revision: refs.reportRevision.value.trim() || "R00",
     reportDate: refs.reportDate.value.trim(),
-    logoDataUrl: state.reportLogoDataUrl,
+    logo: state.reportLogo ? { ...state.reportLogo } : null,
     sections,
   };
 }
@@ -6046,15 +6890,24 @@ async function fileToDataUrl(file: File): Promise<string> {
 async function handleReportLogoSelection(): Promise<void> {
   const file = refs.reportLogo.files?.[0];
   if (!file) {
-    state.reportLogoDataUrl = "";
+    state.reportLogo = null;
     refs.reportLogoName.textContent = tx("labelReportLogoNoFile");
     return;
   }
-  if (!file.type.startsWith("image/")) {
-    throw new Error(state.lang === "en" ? "Logo must be an image file." : "Logo dosyası bir görsel olmalıdır.");
+  if (!REPORT_LOGO_MIME_TYPES.includes(file.type as AllowedReportLogoMime)) {
+    throw new Error(tx("statusReportLogoInvalidType"));
   }
-  state.reportLogoDataUrl = await fileToDataUrl(file);
-  refs.reportLogoName.textContent = file.name;
+  assertFileSizeWithinLimit(file, REPORT_LOGO_MAX_BYTES, tx("statusReportLogoTooLarge"));
+  const sanitized = sanitizeReportLogoAsset({
+    name: file.name,
+    mime: file.type as AllowedReportLogoMime,
+    dataUrl: await fileToDataUrl(file),
+  });
+  if (!sanitized) {
+    throw new Error(tx("statusReportLogoInvalidData"));
+  }
+  state.reportLogo = sanitized;
+  refs.reportLogoName.textContent = sanitized.name;
   setStatus(tx("statusReportLogoLoaded"), "info");
 }
 
@@ -6084,20 +6937,22 @@ function sanitizeProjectFilename(raw: string): string {
     .slice(0, 72) || "pmmstudio-project";
 }
 
-function collectProjectFile(): ProjectFileV1 {
+function collectProjectFile(): ProjectFileV2 {
   syncSectionFormToState();
+  clampAnalysisControlInputs();
+  assertLoadSheetRowLimit(state.loadSheet);
   const activeSec = state.sections[state.activeSectionIdx];
   return {
     schema: "pmmstudio-project",
-    version: 1,
+    version: PROJECT_FILE_VERSION,
     savedAt: new Date().toISOString(),
     sections: state.sections.map((s) => ({ ...s })),
-      input: {
-        codeMode: refs.codeMode.value as CodeMode,
-        concreteModel: refs.concreteModel.value as ConcreteModel,
-        materialPreset: refs.materialPreset.value,
-        steelPreset: refs.steelPreset.value,
-        shape: activeSec.shape,
+    input: {
+      codeMode: refs.codeMode.value as CodeMode,
+      concreteModel: refs.concreteModel.value as ConcreteModel,
+      materialPreset: refs.materialPreset.value,
+      steelPreset: refs.steelPreset.value,
+      shape: activeSec.shape,
       width: activeSec.width,
       height: activeSec.height,
       diameter: activeSec.diameter,
@@ -6152,8 +7007,7 @@ function collectProjectFile(): ProjectFileV1 {
       checkedBy: refs.reportCheckedBy.value.trim(),
       revision: refs.reportRevision.value.trim(),
       reportDate: refs.reportDate.value.trim(),
-      logoDataUrl: state.reportLogoDataUrl,
-      logoName: refs.reportLogoName.textContent?.trim() ?? "",
+      logo: state.reportLogo ? { ...state.reportLogo } : null,
       sections: collectReportSectionOptions(),
     },
   };
@@ -6175,7 +7029,7 @@ function readRecordBoolean(record: Record<string, unknown>, key: string, fallbac
   return typeof value === "boolean" ? value : fallback;
 }
 
-function parseProjectFile(text: string): ProjectFileV1 {
+function parseProjectFile(text: string): ParsedProjectFile {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -6186,11 +7040,15 @@ function parseProjectFile(text: string): ProjectFileV1 {
   if (!isRecord(raw) || raw.schema !== "pmmstudio-project") {
     throw new Error(tx("statusProjectInvalid"));
   }
+  if (raw.version !== PROJECT_FILE_VERSION) {
+    throw new Error(tx("statusProjectVersionUnsupported"));
+  }
 
   const inputRaw = isRecord(raw.input) ? raw.input : {};
   const reportRaw = isRecord(raw.report) ? raw.report : {};
   const sectionsRaw = isRecord(reportRaw.sections) ? reportRaw.sections : {};
   const loadSheetRaw = Array.isArray(raw.loadSheet) ? raw.loadSheet : [];
+  const warnings: string[] = [];
 
   const codeModeRaw = readRecordString(inputRaw, "codeMode", "ts500_tbdy");
   const concreteModelRaw = readRecordString(inputRaw, "concreteModel", "mander_core_cover");
@@ -6207,6 +7065,7 @@ function parseProjectFile(text: string): ProjectFileV1 {
       mux: readRecordString(row, "mux"),
       muy: readRecordString(row, "muy"),
     }));
+  assertLoadSheetRowLimit(loadSheet);
 
   const sectionsArray = Array.isArray(raw.sections) ? raw.sections : [];
   const parsedSections: SectionDef[] = sectionsArray
@@ -6238,93 +7097,121 @@ function parseProjectFile(text: string): ProjectFileV1 {
     });
 
   return {
-    schema: "pmmstudio-project",
-    version: 1,
-    savedAt: typeof raw.savedAt === "string" ? raw.savedAt : new Date().toISOString(),
-    sections: parsedSections.length > 0 ? parsedSections : undefined,
+    project: {
+      schema: "pmmstudio-project",
+      version: PROJECT_FILE_VERSION,
+      savedAt: typeof raw.savedAt === "string" ? raw.savedAt : new Date().toISOString(),
+      sections: parsedSections.length > 0 ? parsedSections : undefined,
       input: {
         codeMode: codeModeRaw === "ts500" || codeModeRaw === "ts500_tbdy" || codeModeRaw === "aci318_19" ? codeModeRaw : "ts500_tbdy",
         concreteModel: concreteModelRaw === "ts500_block" || concreteModelRaw === "mander_core_cover" ? concreteModelRaw : "mander_core_cover",
         materialPreset: isMaterialPresetId(materialPresetRaw) ? materialPresetRaw : "custom",
         steelPreset: isSteelPresetId(steelPresetRaw) ? steelPresetRaw : "custom",
         shape: shapeRaw === "rect" || shapeRaw === "circle" ? shapeRaw : "rect",
-      width: readRecordString(inputRaw, "width", refs.width.value),
-      height: readRecordString(inputRaw, "height", refs.height.value),
-      diameter: readRecordString(inputRaw, "diameter", refs.diameter.value),
-      barsX: readRecordString(inputRaw, "barsX", refs.barsX.value),
-      barsY: readRecordString(inputRaw, "barsY", refs.barsY.value),
-      bars: readRecordString(inputRaw, "bars", refs.bars.value),
-      useDoubleLayer: readRecordBoolean(inputRaw, "useDoubleLayer", refs.doubleLayer.checked),
-      barsX2: readRecordString(inputRaw, "barsX2", refs.barsX2.value),
-      barsY2: readRecordString(inputRaw, "barsY2", refs.barsY2.value),
-      bars2: readRecordString(inputRaw, "bars2", refs.bars2.value),
-      layerSpacing: readRecordString(inputRaw, "layerSpacing", refs.layerSpacing.value),
-      cover: readRecordString(inputRaw, "cover", refs.cover.value),
-      tieDia: readRecordString(inputRaw, "tieDia", refs.tieDia.value),
-      barDia: readRecordString(inputRaw, "barDia", refs.barDia.value),
-      tieSpacingConf: readRecordString(inputRaw, "tieSpacingConf", refs.tieSpacingConf.value),
-      tieSpacingMid: readRecordString(inputRaw, "tieSpacingMid", refs.tieSpacingMid.value),
-      coverToCenter: readRecordBoolean(inputRaw, "coverToCenter", refs.coverToCenter.checked),
-      useExpectedStrength: readRecordBoolean(inputRaw, "useExpectedStrength", refs.useExpectedStrength.checked),
-      expectedFckFactor: readRecordString(inputRaw, "expectedFckFactor", refs.expectedFckFactor.value),
-      expectedFykFactor: readRecordString(inputRaw, "expectedFykFactor", refs.expectedFykFactor.value),
-      fck: readRecordString(inputRaw, "fck", refs.fck.value),
-      fyk: readRecordString(inputRaw, "fyk", refs.fyk.value),
-      gammaC: readRecordString(inputRaw, "gammaC", refs.gammaC.value),
-      gammaS: readRecordString(inputRaw, "gammaS", refs.gammaS.value),
-      es: readRecordString(inputRaw, "es", refs.es.value),
-      epsCu: readRecordString(inputRaw, "epsCu", refs.epsCu.value),
-      mesh: readRecordString(inputRaw, "mesh", refs.mesh.value),
-      nAngle: readRecordString(inputRaw, "nAngle", refs.nAngle.value),
-      nDepth: readRecordString(inputRaw, "nDepth", refs.nDepth.value),
-      phiP: readRecordString(inputRaw, "phiP", refs.phiP.value),
-      phiM: readRecordString(inputRaw, "phiM", refs.phiM.value),
-      pCutoffRatio: readRecordString(inputRaw, "pCutoffRatio", refs.pCutoffRatio.value),
-      pVisualScale: readRecordString(inputRaw, "pVisualScale", refs.pVisualScale.value),
-      surfaceOpacity: readRecordString(inputRaw, "surfaceOpacity", refs.surfaceOpacity.value),
-      pSign: pSignRaw === "compression_negative" ? "compression_negative" : "compression_positive",
-      projection: readRecordString(inputRaw, "projection", refs.projection.value),
-      showNominalSurface: readRecordBoolean(inputRaw, "showNominalSurface", refs.showNominalSurface.checked),
-      sliceAngle: readRecordString(inputRaw, "sliceAngle", refs.sliceAngle.value),
-      sliceHideZero: readRecordBoolean(inputRaw, "sliceHideZero", refs.sliceHideZero.checked),
-      mcP: readRecordString(inputRaw, "mcP", refs.mcP.value),
-      mcAngle: readRecordString(inputRaw, "mcAngle", refs.mcAngle.value),
-      mcSteps: readRecordString(inputRaw, "mcSteps", refs.mcSteps.value),
-      controlsOpen: readRecordBoolean(inputRaw, "controlsOpen", refs.controlsAccordion.open),
-    },
-    loadSheet: loadSheet.length > 0 ? loadSheet : [emptyLoadSheetRow("L1")],
-    report: {
-      company: readRecordString(reportRaw, "company"),
-      documentTitle: readRecordString(reportRaw, "documentTitle"),
-      project: readRecordString(reportRaw, "project"),
-      client: readRecordString(reportRaw, "client"),
-      preparedBy: readRecordString(reportRaw, "preparedBy"),
-      checkedBy: readRecordString(reportRaw, "checkedBy"),
-      revision: readRecordString(reportRaw, "revision", "R00"),
-      reportDate: readRecordString(reportRaw, "reportDate"),
-      logoDataUrl: readRecordString(reportRaw, "logoDataUrl"),
-      logoName: readRecordString(reportRaw, "logoName"),
-      sections: {
-        cover: readRecordBoolean(sectionsRaw, "cover", true),
-        summary: readRecordBoolean(sectionsRaw, "summary", true),
-        visuals: readRecordBoolean(sectionsRaw, "visuals", true),
-        loadInput: readRecordBoolean(sectionsRaw, "loadInput", true),
-        loadResults: readRecordBoolean(sectionsRaw, "loadResults", true),
-        compliance: readRecordBoolean(sectionsRaw, "compliance", true),
-        mphi: readRecordBoolean(sectionsRaw, "mphi", true),
-        appendix: readRecordBoolean(sectionsRaw, "appendix", true),
+        width: readRecordString(inputRaw, "width", refs.width.value),
+        height: readRecordString(inputRaw, "height", refs.height.value),
+        diameter: readRecordString(inputRaw, "diameter", refs.diameter.value),
+        barsX: readRecordString(inputRaw, "barsX", refs.barsX.value),
+        barsY: readRecordString(inputRaw, "barsY", refs.barsY.value),
+        bars: readRecordString(inputRaw, "bars", refs.bars.value),
+        useDoubleLayer: readRecordBoolean(inputRaw, "useDoubleLayer", refs.doubleLayer.checked),
+        barsX2: readRecordString(inputRaw, "barsX2", refs.barsX2.value),
+        barsY2: readRecordString(inputRaw, "barsY2", refs.barsY2.value),
+        bars2: readRecordString(inputRaw, "bars2", refs.bars2.value),
+        layerSpacing: readRecordString(inputRaw, "layerSpacing", refs.layerSpacing.value),
+        cover: readRecordString(inputRaw, "cover", refs.cover.value),
+        tieDia: readRecordString(inputRaw, "tieDia", refs.tieDia.value),
+        barDia: readRecordString(inputRaw, "barDia", refs.barDia.value),
+        tieSpacingConf: readRecordString(inputRaw, "tieSpacingConf", refs.tieSpacingConf.value),
+        tieSpacingMid: readRecordString(inputRaw, "tieSpacingMid", refs.tieSpacingMid.value),
+        coverToCenter: readRecordBoolean(inputRaw, "coverToCenter", refs.coverToCenter.checked),
+        useExpectedStrength: readRecordBoolean(inputRaw, "useExpectedStrength", refs.useExpectedStrength.checked),
+        expectedFckFactor: readRecordString(inputRaw, "expectedFckFactor", refs.expectedFckFactor.value),
+        expectedFykFactor: readRecordString(inputRaw, "expectedFykFactor", refs.expectedFykFactor.value),
+        fck: readRecordString(inputRaw, "fck", refs.fck.value),
+        fyk: readRecordString(inputRaw, "fyk", refs.fyk.value),
+        gammaC: readRecordString(inputRaw, "gammaC", refs.gammaC.value),
+        gammaS: readRecordString(inputRaw, "gammaS", refs.gammaS.value),
+        es: readRecordString(inputRaw, "es", refs.es.value),
+        epsCu: readRecordString(inputRaw, "epsCu", refs.epsCu.value),
+        mesh: normalizeClampedIntegerString(
+          readRecordString(inputRaw, "mesh", refs.mesh.value),
+          ANALYSIS_LIMITS.mesh.min,
+          ANALYSIS_LIMITS.mesh.max,
+          ANALYSIS_LIMITS.mesh.fallback
+        ),
+        nAngle: normalizeClampedIntegerString(
+          readRecordString(inputRaw, "nAngle", refs.nAngle.value),
+          ANALYSIS_LIMITS.nAngle.min,
+          ANALYSIS_LIMITS.nAngle.max,
+          ANALYSIS_LIMITS.nAngle.fallback
+        ),
+        nDepth: normalizeClampedIntegerString(
+          readRecordString(inputRaw, "nDepth", refs.nDepth.value),
+          ANALYSIS_LIMITS.nDepth.min,
+          ANALYSIS_LIMITS.nDepth.max,
+          ANALYSIS_LIMITS.nDepth.fallback
+        ),
+        phiP: readRecordString(inputRaw, "phiP", refs.phiP.value),
+        phiM: readRecordString(inputRaw, "phiM", refs.phiM.value),
+        pCutoffRatio: readRecordString(inputRaw, "pCutoffRatio", refs.pCutoffRatio.value),
+        pVisualScale: readRecordString(inputRaw, "pVisualScale", refs.pVisualScale.value),
+        surfaceOpacity: readRecordString(inputRaw, "surfaceOpacity", refs.surfaceOpacity.value),
+        pSign: pSignRaw === "compression_negative" ? "compression_negative" : "compression_positive",
+        projection: readRecordString(inputRaw, "projection", refs.projection.value),
+        showNominalSurface: readRecordBoolean(inputRaw, "showNominalSurface", refs.showNominalSurface.checked),
+        sliceAngle: readRecordString(inputRaw, "sliceAngle", refs.sliceAngle.value),
+        sliceHideZero: readRecordBoolean(inputRaw, "sliceHideZero", refs.sliceHideZero.checked),
+        mcP: readRecordString(inputRaw, "mcP", refs.mcP.value),
+        mcAngle: readRecordString(inputRaw, "mcAngle", refs.mcAngle.value),
+        mcSteps: readRecordString(inputRaw, "mcSteps", refs.mcSteps.value),
+        controlsOpen: readRecordBoolean(inputRaw, "controlsOpen", refs.controlsAccordion.open),
+      },
+      loadSheet: loadSheet.length > 0 ? loadSheet : [emptyLoadSheetRow("L1")],
+      report: {
+        company: readRecordString(reportRaw, "company"),
+        documentTitle: readRecordString(reportRaw, "documentTitle"),
+        project: readRecordString(reportRaw, "project"),
+        client: readRecordString(reportRaw, "client"),
+        preparedBy: readRecordString(reportRaw, "preparedBy"),
+        checkedBy: readRecordString(reportRaw, "checkedBy"),
+        revision: readRecordString(reportRaw, "revision", "R00"),
+        reportDate: readRecordString(reportRaw, "reportDate"),
+        logo: parseReportLogoFromRecord(reportRaw, warnings),
+        sections: {
+          cover: readRecordBoolean(sectionsRaw, "cover", true),
+          summary: readRecordBoolean(sectionsRaw, "summary", true),
+          visuals: readRecordBoolean(sectionsRaw, "visuals", true),
+          loadInput: readRecordBoolean(sectionsRaw, "loadInput", true),
+          loadResults: readRecordBoolean(sectionsRaw, "loadResults", true),
+          compliance: readRecordBoolean(sectionsRaw, "compliance", true),
+          mphi: readRecordBoolean(sectionsRaw, "mphi", true),
+          appendix: readRecordBoolean(sectionsRaw, "appendix", true),
+        },
       },
     },
+    warnings,
   };
 }
 
 function clearMomentCurvatureOutputs(): void {
   state.mcData = null;
+  state.mcBatchData = [];
+  purgePlotlyFigure(refs.plotMc);
+  purgePlotlyFigure(refs.plotMcStrain);
   refs.plotMc.innerHTML = "";
   refs.plotMcStrain.innerHTML = "";
+  refs.plotMc.removeAttribute("aria-busy");
+  refs.plotMc.removeAttribute("aria-label");
+  refs.plotMcStrain.removeAttribute("aria-busy");
+  refs.plotMcStrain.removeAttribute("aria-label");
   refs.mcDataTable.innerHTML = "";
   refs.mcStats.innerHTML = "";
   refs.mcStats.classList.add("hidden");
+  refs.mcMonitoring.innerHTML = "";
+  refs.mcMonitoring.classList.add("hidden");
+  refs.mcBatch.innerHTML = "";
+  refs.mcBatch.classList.add("hidden");
   refs.mcHoverInfo.classList.add("hidden");
   refs.mcHiEpsC.textContent = "—";
   refs.mcHiEpsS.textContent = "—";
@@ -6371,7 +7258,7 @@ function persistProjectPrefs(): void {
   localStorage.setItem("pmm-controls-open", refs.controlsAccordion.open ? "1" : "0");
 }
 
-function applyProjectFile(project: ProjectFileV1): void {
+function applyProjectFile(project: ProjectFileV2): void {
   setSelectValue(refs.codeMode, project.input.codeMode, "ts500_tbdy");
   setSelectValue(refs.concreteModel, project.input.concreteModel, "mander_core_cover");
   syncPresetVisibilityForCodeMode();
@@ -6430,6 +7317,7 @@ function applyProjectFile(project: ProjectFileV1): void {
   setTextValue(refs.mesh, project.input.mesh, "55");
   setTextValue(refs.nAngle, project.input.nAngle, "72");
   setTextValue(refs.nDepth, project.input.nDepth, "55");
+  clampAnalysisControlInputs();
   setTextValue(refs.phiP, project.input.phiP, "0.65");
   setTextValue(refs.phiM, project.input.phiM, "0.90");
   setTextValue(refs.pCutoffRatio, project.input.pCutoffRatio, "0.80");
@@ -6469,10 +7357,10 @@ function applyProjectFile(project: ProjectFileV1): void {
   refs.reportSecCompliance.checked = project.report.sections.compliance;
   refs.reportSecMphi.checked = project.report.sections.mphi;
   refs.reportSecAppendix.checked = project.report.sections.appendix;
-  state.reportLogoDataUrl = project.report.logoDataUrl;
+  state.reportLogo = project.report.logo ? { ...project.report.logo } : null;
   refs.reportLogo.value = "";
-  refs.reportLogoName.textContent = project.report.logoDataUrl
-    ? (project.report.logoName || (state.lang === "en" ? "Embedded logo" : "Gömülü logo"))
+  refs.reportLogoName.textContent = state.reportLogo
+    ? (state.reportLogo.name || localizeText("Gömülü logo", "Embedded logo"))
     : tx("labelReportLogoNoFile");
 
   persistProjectPrefs();
@@ -6506,10 +7394,12 @@ async function openProjectFile(): Promise<void> {
   const file = refs.projectFile.files?.[0];
   if (!file) return;
   try {
+    assertFileSizeWithinLimit(file, PROJECT_FILE_MAX_BYTES, tx("statusProjectFileTooLarge"));
     const text = await readFileText(file);
-    const project = parseProjectFile(text);
+    const { project, warnings } = parseProjectFile(text);
     applyProjectFile(project);
-    setStatus(`${tx("statusProjectOpened")} (${file.name})`, "info");
+    const suffix = warnings.length > 0 ? ` ${warnings.join(" ")}` : "";
+    setStatus(`${tx("statusProjectOpened")} (${file.name})${suffix}`, warnings.length > 0 ? "danger" : "info");
   } finally {
     refs.projectFile.value = "";
   }
@@ -6523,8 +7413,8 @@ function formatIsoDateForDisplay(value: string): string {
 }
 
 async function capturePlotlyImage(host: HTMLElement, width: number, height: number): Promise<string> {
-  const currentPlotly = Plotly as any;
   try {
+    const currentPlotly = await ensurePlotly() as any;
     const url = await currentPlotly.toImage(host, { format: "png", width, height });
     return String(url);
   } catch {
@@ -6594,7 +7484,7 @@ async function createMcImageForReport(data: McData, title: string): Promise<stri
 
   const config = { displayModeBar: false, responsive: false };
   try {
-    const currentPlotly = Plotly as any;
+    const currentPlotly = await ensurePlotly() as any;
     await currentPlotly.newPlot(host, [curve, bilinear, peak], layout, config);
     const url = await currentPlotly.toImage(host, { format: "png", width: 1100, height: 500 });
     currentPlotly.purge(host);
@@ -6606,38 +7496,31 @@ async function createMcImageForReport(data: McData, title: string): Promise<stri
   }
 }
 
-function chooseReportAxialLoad(loads: LoadCase[], signMode: PSignMode): number {
-  if (loads.length === 0) return 0;
-  const factor = pSignFactorForMode(signMode);
-  const compressionValues = loads.map((l) => l.pu * factor).filter((v) => Number.isFinite(v));
-  if (compressionValues.length === 0) return loads[0].pu;
-  const compMax = Math.max(...compressionValues);
-  if (!Number.isFinite(compMax) || compMax <= 0) return loads[0].pu;
-  return compMax * factor;
-}
-
 function reportInputRows(input: AppInput): Array<[string, string]> {
   return [
-    ["Kod modu", input.codeMode],
-    ["Kesit tipi", input.shape === "rect" ? "Dörtgen" : "Dairesel"],
-    ["Beton modeli", input.concreteModel === "mander_core_cover" ? "Mander core+cover" : "TS500 eşdeğer blok"],
-    ["Boyutlar", input.shape === "rect" ? `b=${fmt(input.widthM, 3)} m, h=${fmt(input.heightM, 3)} m` : `D=${fmt(input.diameterM, 3)} m`],
-    ["Donatı", `Ø${fmt(input.barDiaMm, 0)} mm, etriye Ø${fmt(input.tieDiaMm, 0)} mm`],
-    ["Donatı düzeni", input.shape === "rect"
+    [reportText("Kod modu", "Code mode"), input.codeMode],
+    [reportText("Kesit tipi", "Section type"), input.shape === "rect" ? reportText("Dörtgen", "Rectangular") : reportText("Dairesel", "Circular")],
+    [reportText("Beton modeli", "Concrete model"), input.concreteModel === "mander_core_cover" ? "Mander core+cover" : reportText("TS500 eşdeğer blok", "TS500 equivalent block")],
+    [reportText("Boyutlar", "Dimensions"), input.shape === "rect" ? `b=${fmt(input.widthM, 3)} m, h=${fmt(input.heightM, 3)} m` : `D=${fmt(input.diameterM, 3)} m`],
+    [reportText("Donatı", "Reinforcement"), `Ø${fmt(input.barDiaMm, 0)} mm, ${reportText("etriye", "tie")} Ø${fmt(input.tieDiaMm, 0)} mm`],
+    [reportText("Donatı düzeni", "Rebar layout"), input.shape === "rect"
       ? (
         input.useDoubleLayer
-          ? `1.sıra üst/alt=${input.barsX}, sol/sağ=${input.barsY}; 2.sıra üst/alt=${input.barsX2}, sol/sağ=${input.barsY2}; a_row=${fmt(input.layerSpacingMm, 0)} mm`
-          : `üst/alt=${input.barsX}, sol/sağ=${input.barsY}`
+          ? reportText(
+            `1.sıra üst/alt=${input.barsX}, sol/sağ=${input.barsY}; 2.sıra üst/alt=${input.barsX2}, sol/sağ=${input.barsY2}; a_row=${fmt(input.layerSpacingMm, 0)} mm`,
+            `Layer 1 top/bottom=${input.barsX}, left/right=${input.barsY}; layer 2 top/bottom=${input.barsX2}, left/right=${input.barsY2}; a_row=${fmt(input.layerSpacingMm, 0)} mm`
+          )
+          : reportText(`üst/alt=${input.barsX}, sol/sağ=${input.barsY}`, `top/bottom=${input.barsX}, left/right=${input.barsY}`)
       )
       : (
         input.useDoubleLayer
-          ? `1.halka=${input.bars}, 2.halka=${input.bars2}, a_row=${fmt(input.layerSpacingMm, 0)} mm`
-          : `toplam bar=${input.bars}`
+          ? reportText(`1.halka=${input.bars}, 2.halka=${input.bars2}, a_row=${fmt(input.layerSpacingMm, 0)} mm`, `ring 1=${input.bars}, ring 2=${input.bars2}, a_row=${fmt(input.layerSpacingMm, 0)} mm`)
+          : reportText(`toplam bar=${input.bars}`, `total bars=${input.bars}`)
       )],
-    ["Örtü", `${fmt(input.coverM, 3)} m (${input.coverToCenter ? "merkeze kadar" : "net örtü"})`],
-    ["Malzemeler", `fck=${fmt(input.fck, 1)} MPa, fyk=${fmt(input.fyk, 1)} MPa, Es=${fmt(input.es, 0)} MPa`],
-    ["Güvenlik", `gc=${fmt(input.gammaC, 2)}, gs=${fmt(input.gammaS, 2)}, phiP=${fmt(input.phiP, 2)}, phiM=${fmt(input.phiM, 2)}, cut-off=${fmt(input.pCutoffRatio, 2)}`],
-    ["Analiz ağı", `fiber mesh=${input.mesh}, açı=${input.nAngle}, nötr eksen=${input.nDepth}`],
+    [reportText("Örtü", "Cover"), `${fmt(input.coverM, 3)} m (${input.coverToCenter ? reportText("merkeze kadar", "to bar center") : reportText("net örtü", "clear cover")})`],
+    [reportText("Malzemeler", "Materials"), `fck=${fmt(input.fck, 1)} MPa, fyk=${fmt(input.fyk, 1)} MPa, Es=${fmt(input.es, 0)} MPa`],
+    [reportText("Güvenlik", "Design factors"), `gc=${fmt(input.gammaC, 2)}, gs=${fmt(input.gammaS, 2)}, phiP=${fmt(input.phiP, 2)}, phiM=${fmt(input.phiM, 2)}, cut-off=${fmt(input.pCutoffRatio, 2)}`],
+    [reportText("Analiz ağı", "Analysis mesh"), reportText(`fiber mesh=${input.mesh}, açı=${input.nAngle}, nötr eksen=${input.nDepth}`, `fiber mesh=${input.mesh}, angle=${input.nAngle}, neutral-axis=${input.nDepth}`)],
   ];
 }
 
@@ -6666,10 +7549,20 @@ async function buildReportSnapshot(): Promise<ReportSnapshot> {
     throw new Error(state.lang === "en" ? "Cannot configure section for report." : "Rapor için kesit konfigürasyonu başarısız.");
   }
 
-  const pForMc = chooseReportAxialLoad(input.loads, input.pSignMode);
   const pSignFactor = pSignFactorForMode(input.pSignMode);
-  const mc0Data = computeMcDataAtAngle(wasm, input, pForMc, 0, 140, pSignFactor);
-  const mc90Data = computeMcDataAtAngle(wasm, input, pForMc, 90, 140, pSignFactor);
+  const pForMc = Number(refs.mcP.value.trim().replace(",", "."));
+  if (!Number.isFinite(pForMc)) {
+    throw new Error(tx("statusMcNoPmm"));
+  }
+  const mcStepsForReport = Math.max(20, Math.min(2000, Math.round(Number(refs.mcSteps.value) || 80)));
+  const batch0 = findBatchCurve(0);
+  const batch90 = findBatchCurve(90);
+  const mc0Data = batch0?.data
+    ? cloneMcData(batch0.data)
+    : computeMcDataAtAngle(wasm, input, pForMc, 0, mcStepsForReport, pSignFactor);
+  const mc90Data = batch90?.data
+    ? cloneMcData(batch90.data)
+    : computeMcDataAtAngle(wasm, input, pForMc, 90, mcStepsForReport, pSignFactor);
   const [mc0Image, mc90Image] = await Promise.all([
     createMcImageForReport(mc0Data, "Moment-Eğrilik (0° / Mx)"),
     createMcImageForReport(mc90Data, "Moment-Eğrilik (90° / My)"),
@@ -6725,22 +7618,42 @@ function renderMphiSummaryTable(section: MphiReportSection): string {
   return `
     <table class="kv-table">
       <tbody>
-        <tr><th>Açı</th><td>${fmt(section.angleDeg, 0)}°</td></tr>
+        <tr><th>${escapeHtml(reportText("Açı", "Angle"))}</th><td>${fmt(section.angleDeg, 0)}°</td></tr>
         <tr><th>P</th><td>${fmt(section.axialLoadKn, 1)} kN</td></tr>
         <tr><th>Mu</th><td>${fmt(section.keyPoints.mu, 2)} kNm</td></tr>
         <tr><th>φu</th><td>${section.keyPoints.phiU.toExponential(4)} 1/m</td></tr>
-        <tr><th>φy (bilineer)</th><td>${section.keyPoints.phiY.toExponential(4)} 1/m</td></tr>
+        <tr><th>${escapeHtml(reportText("φy (bilineer)", "φy (bilinear)"))}</th><td>${section.keyPoints.phiY.toExponential(4)} 1/m</td></tr>
         <tr><th>μφ</th><td>${fmt(section.keyPoints.ductility, 2)}</td></tr>
       </tbody>
     </table>
   `;
 }
 
+function renderReportGoverningSummary(snapshot: ReportSnapshot): string {
+  const governing = findGoverningResult(snapshot.results);
+  if (!governing) return "";
+  const issue = findPrimaryComplianceIssue(snapshot.compliance);
+  const ratioText = Number.isFinite(governing.scale) ? `${fmt(governing.scale, 4)}x` : "-";
+  return `
+    <div class="governing-report">
+      <div class="summary-grid">
+        <div class="summary-chip"><span class="k">${escapeHtml(reportText("Belirleyici yük", "Governing load"))}</span><span class="v">${escapeHtml(governing.name || reportText("Adsız yük", "Unnamed load"))}</span></div>
+        <div class="summary-chip"><span class="k">DCR</span><span class="v">${Number.isFinite(governing.dcr) ? fmt(governing.dcr, 4) : "-"}</span></div>
+        <div class="summary-chip"><span class="k">${escapeHtml(reportText("Kapasite oranı", "Capacity ratio"))}</span><span class="v">${escapeHtml(ratioText)}</span></div>
+        <div class="summary-chip"><span class="k">${escapeHtml(reportText("Durum", "Status"))}</span><span class="v">${escapeHtml(governing.ok ? tx("resultOk") : tx("resultFail"))}</span></div>
+      </div>
+      <p class="section-note">${escapeHtml(governingNarrative(governing, issue))}</p>
+      ${issue ? `<p class="section-note"><strong>${escapeHtml(reportText("Belirleyici kod kontrolü", "Primary code check"))}:</strong> ${escapeHtml(issue.code)} ${escapeHtml(issue.clause)} - ${escapeHtml(issue.description)}</p>` : ""}
+    </div>
+  `;
+}
+
 function buildReportHtml(snapshot: ReportSnapshot, printMode: boolean): string {
   const generatedAt = new Date().toLocaleString(currentLocale());
+  const reportLang = state.lang === "en" ? "en" : "tr";
   const sections = snapshot.meta.sections;
-  const docTitle = snapshot.meta.documentTitle || "Kolon PMM Teknik Raporu";
-  const safeLogo = snapshot.meta.logoDataUrl;
+  const docTitle = snapshot.meta.documentTitle || reportText("Kolon PMM Teknik Raporu", "Column PMM Technical Report");
+  const safeLogo = snapshot.meta.logo?.dataUrl ?? "";
   const summaryRows = reportInputRows(snapshot.input)
     .map(([k, v]) => `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(v)}</td></tr>`)
     .join("");
@@ -6781,7 +7694,7 @@ function buildReportHtml(snapshot: ReportSnapshot, printMode: boolean): string {
 
   const imageMarkup = (url: string, alt: string, fallback: string): string => (
     url
-      ? `<img src="${url}" alt="${escapeHtml(alt)}" />`
+      ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" />`
       : `<p class="small">${escapeHtml(fallback)}</p>`
   );
 
@@ -6795,7 +7708,7 @@ function buildReportHtml(snapshot: ReportSnapshot, printMode: boolean): string {
           <h1 class="title">${escapeHtml(docTitle)}</h1>
           <p class="subtitle">${escapeHtml(snapshot.meta.project)}</p>
         </div>
-        ${safeLogo ? `<div class="cover-logo-wrap"><img class="cover-logo" src="${safeLogo}" alt="Kurumsal logo" /></div>` : ""}
+        ${safeLogo ? `<div class="cover-logo-wrap"><img class="cover-logo" src="${escapeHtml(safeLogo)}" alt="Kurumsal logo" /></div>` : ""}
       </div>
       <div class="cover-meta">
         <div class="meta-item"><div class="meta-k">Kurum/Firma</div><div class="meta-v">${escapeHtml(snapshot.meta.company || "-")}</div></div>
@@ -6812,17 +7725,18 @@ function buildReportHtml(snapshot: ReportSnapshot, printMode: boolean): string {
   if (sections.summary) {
     sectionBlocks.push(`
     <section class="section">
-      <h2>Analiz Özeti</h2>
+      <h2>${escapeHtml(reportText("Analiz Özeti", "Analysis Summary"))}</h2>
       <div class="summary-grid">
-        <div class="summary-chip"><span class="k">Kod Modu</span><span class="v">${escapeHtml(selectedOptionText(refs.codeMode))}</span></div>
-        <div class="summary-chip"><span class="k">Kesit Tipi</span><span class="v">${escapeHtml(selectedOptionText(refs.shape))}</span></div>
-        <div class="summary-chip"><span class="k">Beton Modeli</span><span class="v">${escapeHtml(selectedOptionText(refs.concreteModel))}</span></div>
-        <div class="summary-chip"><span class="k">PMM Noktası</span><span class="v">${fmt(snapshot.pmmPointCount, 0)}</span></div>
+        <div class="summary-chip"><span class="k">${escapeHtml(reportText("Kod Modu", "Code Mode"))}</span><span class="v">${escapeHtml(selectedOptionText(refs.codeMode))}</span></div>
+        <div class="summary-chip"><span class="k">${escapeHtml(reportText("Kesit Tipi", "Section Type"))}</span><span class="v">${escapeHtml(selectedOptionText(refs.shape))}</span></div>
+        <div class="summary-chip"><span class="k">${escapeHtml(reportText("Beton Modeli", "Concrete Model"))}</span><span class="v">${escapeHtml(selectedOptionText(refs.concreteModel))}</span></div>
+        <div class="summary-chip"><span class="k">${escapeHtml(reportText("PMM Noktası", "PMM Points"))}</span><span class="v">${fmt(snapshot.pmmPointCount, 0)}</span></div>
         <div class="summary-chip"><span class="k">DCR (min / max)</span><span class="v">${fmt(snapshot.minDcr, 4)} / ${fmt(snapshot.maxDcr, 4)}</span></div>
-        <div class="summary-chip"><span class="k">Uyumlu</span><span class="v">${fmt(snapshot.passCount, 0)}</span></div>
-        <div class="summary-chip"><span class="k">Uyumsuz</span><span class="v">${fmt(snapshot.failCount, 0)}</span></div>
-        <div class="summary-chip"><span class="k">Ek Kontrol</span><span class="v">${fmt(snapshot.infoCount, 0)}</span></div>
+        <div class="summary-chip"><span class="k">${escapeHtml(reportText("Uyumlu", "Pass"))}</span><span class="v">${fmt(snapshot.passCount, 0)}</span></div>
+        <div class="summary-chip"><span class="k">${escapeHtml(reportText("Uyumsuz", "Fail"))}</span><span class="v">${fmt(snapshot.failCount, 0)}</span></div>
+        <div class="summary-chip"><span class="k">${escapeHtml(reportText("Ek Kontrol", "Info"))}</span><span class="v">${fmt(snapshot.infoCount, 0)}</span></div>
       </div>
+      ${renderReportGoverningSummary(snapshot)}
       <table class="kv-table"><tbody>${summaryRows}</tbody></table>
     </section>`);
   }
@@ -6880,7 +7794,7 @@ function buildReportHtml(snapshot: ReportSnapshot, printMode: boolean): string {
     sectionBlocks.push(`
     <section class="section">
       <h2>Moment-Eğrilik (M-φ) Sonuçları</h2>
-      <p class="section-note">Bu bölüm, rapor için otomatik olarak 0° (Mx) ve 90° (My) yönlerinde tekrar hesaplanmıştır.</p>
+      <p class="section-note">Bu bölüm mevcut M-φ oturumundaki 0° (Mx) ve 90° (My) eğrilerini kullanır; batch verisi yoksa aynı ekran ayarlarıyla yeniden üretilir.</p>
       <div class="fig-grid split-2">
         <div>
           <div class="img-wrap">${imageMarkup(snapshot.mphi0.imageDataUrl, "M-φ 0 derece", "M-φ 0° görseli üretilemedi.")}</div>
@@ -6923,10 +7837,10 @@ function buildReportHtml(snapshot: ReportSnapshot, printMode: boolean): string {
     : "";
 
   return `<!doctype html>
-<html lang="tr">
+<html lang="${reportLang}">
 <head>
   <meta charset="utf-8" />
-  <title>PMM Studio Teknik Rapor</title>
+  <title>${escapeHtml(docTitle)}</title>
   <style>
     :root { --ink:#11283a; --muted:#4d6577; --line:#ced8e1; --soft:#edf3f7; --accent:#0f7f99; --fig-max-width:15.8cm; --logo-width:3.9cm; --logo-max-height:1.7cm; }
     * { box-sizing: border-box; }
@@ -7133,6 +8047,26 @@ function resolveDesignStrengths(input: AppInput): DesignStrengths {
   };
 }
 
+interface McStrengths {
+  fckMc: number;
+  fykMc: number;
+  gammaCMc: number;
+  gammaSMc: number;
+}
+
+function resolveMcStrengths(input: AppInput): McStrengths {
+  const expectedFckFactor = clamp(input.expectedFckFactor, 1.0, 2.0);
+  const expectedFykFactor = clamp(input.expectedFykFactor, 1.0, 2.0);
+  const expectedApplied = input.codeMode === "ts500_tbdy" && input.useExpectedStrength;
+
+  return {
+    fckMc: expectedApplied ? input.fck * expectedFckFactor : input.fck,
+    fykMc: expectedApplied ? input.fyk * expectedFykFactor : input.fyk,
+    gammaCMc: 1.0,
+    gammaSMc: 1.0,
+  };
+}
+
 function fmt(v: number, d = 2): string {
   if (!Number.isFinite(v)) return "-";
   return v.toLocaleString(currentLocale(), { maximumFractionDigits: d, minimumFractionDigits: d });
@@ -7140,6 +8074,10 @@ function fmt(v: number, d = 2): string {
 
 function currentLocale(): string {
   return state.lang === "en" ? "en-US" : "tr-TR";
+}
+
+function localizeText(tr: string, en: string): string {
+  return state.lang === "en" ? en : tr;
 }
 
 function escapeHtml(v: string): string {
@@ -7159,6 +8097,202 @@ function escapeHtml(v: string): string {
   });
 }
 
+function plotLoadingText(): string {
+  return localizeText("Grafik yükleniyor...", "Loading chart...");
+}
+
+function hasPlotlyFigure(host: HTMLElement): boolean {
+  return host.classList.contains("js-plotly-plot")
+    || host.querySelector(".plot-container, .svg-container, .main-svg") != null;
+}
+
+function renderPlotlyFigure(plotly: any, host: HTMLElement, data: any[], layout: any, config: any): Promise<void> {
+  const method = hasPlotlyFigure(host) && typeof plotly.react === "function"
+    ? plotly.react.bind(plotly)
+    : plotly.newPlot.bind(plotly);
+  return Promise.resolve(method(host, data, layout, config)).then(() => undefined);
+}
+
+function purgePlotlyFigure(host: HTMLElement): void {
+  try {
+    const currentPlotly = Plotly as any;
+    if (currentPlotly?.purge && hasPlotlyFigure(host)) {
+      currentPlotly.purge(host);
+    }
+  } catch {
+    // ignore purge errors during teardown
+  }
+}
+
+function sectionSelectLabel(sectionName: string): string {
+  return localizeText(`Kesit ${sectionName} seç`, `Select section ${sectionName}`);
+}
+
+function sectionDeleteLabel(sectionName: string): string {
+  return localizeText(`Kesit ${sectionName} sil`, `Delete section ${sectionName}`);
+}
+
+function loadSheetColumnLabel(col: LoadSheetCol): string {
+  switch (col) {
+    case "name":
+      return localizeText("Yük adı", "Load name");
+    case "pu":
+      return "Pu (kN)";
+    case "mux":
+      return "Mux (kNm)";
+    case "muy":
+      return "Muy (kNm)";
+  }
+}
+
+function loadSheetCellLabel(rowIdx: number, col: LoadSheetCol): string {
+  return localizeText(
+    `${rowIdx + 1}. satır, ${loadSheetColumnLabel(col)}`,
+    `Row ${rowIdx + 1}, ${loadSheetColumnLabel(col)}`
+  );
+}
+
+function loadSheetRowSelectLabel(rowIdx: number): string {
+  return localizeText(`${rowIdx + 1}. yük satırını seç`, `Select load row ${rowIdx + 1}`);
+}
+
+function clampInteger(value: number, min: number, max: number, fallback: number): number {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+function normalizeClampedIntegerString(raw: string, min: number, max: number, fallback: number): string {
+  const parsed = Number(raw.replace(",", "."));
+  return String(clampInteger(parsed, min, max, fallback));
+}
+
+function clampAnalysisControlInputs(): void {
+  refs.mesh.value = normalizeClampedIntegerString(
+    refs.mesh.value,
+    ANALYSIS_LIMITS.mesh.min,
+    ANALYSIS_LIMITS.mesh.max,
+    ANALYSIS_LIMITS.mesh.fallback
+  );
+  refs.nAngle.value = normalizeClampedIntegerString(
+    refs.nAngle.value,
+    ANALYSIS_LIMITS.nAngle.min,
+    ANALYSIS_LIMITS.nAngle.max,
+    ANALYSIS_LIMITS.nAngle.fallback
+  );
+  refs.nDepth.value = normalizeClampedIntegerString(
+    refs.nDepth.value,
+    ANALYSIS_LIMITS.nDepth.min,
+    ANALYSIS_LIMITS.nDepth.max,
+    ANALYSIS_LIMITS.nDepth.fallback
+  );
+}
+
+function countNonEmptyLoadRows(rows: LoadSheetRow[]): number {
+  return rows.filter((row) => !isLoadRowBlank(row)).length;
+}
+
+function assertLoadSheetRowLimit(rows: LoadSheetRow[]): void {
+  if (countNonEmptyLoadRows(rows) > LOAD_SHEET_MAX_NON_EMPTY_ROWS) {
+    throw new Error(tx("statusLoadSheetTooManyRows"));
+  }
+}
+
+function assertFileSizeWithinLimit(file: File, maxBytes: number, message: string): void {
+  if (file.size > maxBytes) {
+    throw new Error(message);
+  }
+}
+
+function estimateBase64ByteLength(dataUrl: string): number {
+  const commaIdx = dataUrl.indexOf(",");
+  if (commaIdx < 0) return 0;
+  const payload = dataUrl.slice(commaIdx + 1);
+  const pad = payload.endsWith("==") ? 2 : payload.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((payload.length * 3) / 4) - pad);
+}
+
+function sanitizeReportLogoAsset(raw: ReportLogoAsset | null | undefined): ReportLogoAsset | null {
+  if (!raw) return null;
+  const name = typeof raw.name === "string" ? raw.name.trim() : "";
+  const mime = typeof raw.mime === "string" ? raw.mime.trim().toLowerCase() : "";
+  if (!REPORT_LOGO_MIME_TYPES.includes(mime as AllowedReportLogoMime)) return null;
+  const dataUrl = typeof raw.dataUrl === "string" ? raw.dataUrl.trim() : "";
+  const match = /^data:(image\/(?:png|jpeg|webp));base64,([a-z0-9+/=]+)$/i.exec(dataUrl);
+  if (!match) return null;
+  if (match[1].toLowerCase() !== mime) return null;
+  if (estimateBase64ByteLength(dataUrl) > REPORT_LOGO_MAX_BYTES) return null;
+  return {
+    name: name || "embedded-logo",
+    mime: mime as AllowedReportLogoMime,
+    dataUrl,
+  };
+}
+
+function parseReportLogoFromRecord(record: Record<string, unknown>, warnings: string[]): ReportLogoAsset | null {
+  const rawLogo = record.logo;
+  if (!isRecord(rawLogo)) return null;
+  const candidate: ReportLogoAsset = {
+    name: typeof rawLogo.name === "string" ? rawLogo.name : "",
+    mime: typeof rawLogo.mime === "string" ? (rawLogo.mime as AllowedReportLogoMime) : "image/png",
+    dataUrl: typeof rawLogo.dataUrl === "string" ? rawLogo.dataUrl : "",
+  };
+  const sanitized = sanitizeReportLogoAsset(candidate);
+  if (!sanitized) {
+    warnings.push(tx("statusProjectLogoDroppedInvalid"));
+    return null;
+  }
+  return sanitized;
+}
+
+function spreadsheetSafeText(value: string): string {
+  const trimmed = value.trimStart();
+  return /^[=+\-@]/.test(trimmed) ? `'${value}` : value;
+}
+
+function toCsvCell(value: string | number): string {
+  const raw = typeof value === "number" ? String(value) : spreadsheetSafeText(value);
+  const escaped = raw.replace(/"/g, "\"\"");
+  return /[",\r\n]/.test(escaped) ? `"${escaped}"` : escaped;
+}
+
+function applyStaticA11yLabels(): void {
+  refs.sectionPreview.setAttribute(
+    "aria-label",
+    localizeText("Kesit ve donatı yerleşimi önizlemesi", "Section and reinforcement layout preview")
+  );
+  refs.plot.setAttribute(
+    "aria-label",
+    localizeText("PMM nokta bulutu grafiği", "PMM point-cloud chart")
+  );
+  refs.plot3d.setAttribute(
+    "aria-label",
+    localizeText("PMM 3B yüzeyi", "PMM 3D surface")
+  );
+  refs.plotMc.setAttribute(
+    "aria-label",
+    localizeText("Moment-eğrilik grafiği", "Moment-curvature chart")
+  );
+  refs.plotMcStrain.setAttribute(
+    "aria-label",
+    localizeText("Kesit şekil değiştirme diyagramı", "Section strain diagram")
+  );
+}
+
+type PlotlyModule = typeof import("plotly.js-dist-min");
+let plotlyPromise: Promise<PlotlyModule["default"]> | null = null;
+
+async function ensurePlotly(): Promise<PlotlyModule["default"]> {
+  if (!plotlyPromise) {
+    plotlyPromise = import("plotly.js-dist-min").then((module) => module.default);
+  }
+  return await plotlyPromise;
+}
+
+function showPlotLoading(host: HTMLElement): void {
+  host.setAttribute("aria-busy", "true");
+  host.setAttribute("aria-label", plotLoadingText());
+}
+
 document.body.classList.add("pmm-app");
 
 let mcResizeToken = 0;
@@ -7166,7 +8300,7 @@ let mcResizeObserver: ResizeObserver | null = null;
 
 function mcFullscreenStageHeightPx(): number {
   const vh = window.innerHeight || 900;
-  return clamp(Math.round(vh * 0.54), 380, 640);
+  return clamp(Math.round(vh * 0.46), 320, 560);
 }
 
 function mcPlotHeightPx(): number {
@@ -7174,7 +8308,7 @@ function mcPlotHeightPx(): number {
   const isFullscreen = !!acc?.classList.contains("mc-fullscreen");
   const vh = window.innerHeight || 900;
   return isFullscreen
-    ? Math.max(320, mcFullscreenStageHeightPx() - 130)
+    ? Math.max(250, mcFullscreenStageHeightPx() - 120)
     : clamp(Math.round(vh * 0.4), 340, 520);
 }
 
@@ -7183,8 +8317,8 @@ function mcStrainHeightPx(): number {
   const isFullscreen = !!acc?.classList.contains("mc-fullscreen");
   const vh = window.innerHeight || 900;
   return isFullscreen
-    ? Math.max(320, mcFullscreenStageHeightPx() - 18)
-    : clamp(Math.round(vh * 0.28), 250, 340);
+    ? Math.max(250, mcFullscreenStageHeightPx() - 12)
+    : clamp(Math.round(vh * 0.48), 420, 560);
 }
 
 function updateMcFullscreenButtonLabel(): void {
@@ -7240,40 +8374,46 @@ function resizeMcPlotsDeferred(delayMs = 80): void {
     let curveHeight = mcPlotHeightPx();
     if (isFullscreen && mainStage) {
       const metaHeight = metaStack?.offsetHeight ?? 0;
-      curveHeight = Math.max(300, fullscreenStageHeight - metaHeight - 18);
+      curveHeight = Math.max(190, fullscreenStageHeight - metaHeight - 10);
     }
 
     let strainHeight = mcStrainHeightPx();
     if (isFullscreen && strainStage) {
-      strainHeight = Math.max(320, fullscreenStageHeight - 20);
+      strainHeight = Math.max(250, fullscreenStageHeight - 12);
     }
 
     refs.plotMc.style.width = "100%";
     refs.plotMc.style.height = `${curveHeight}px`;
     refs.plotMcStrain.style.width = "100%";
     refs.plotMcStrain.style.height = `${strainHeight}px`;
-    try {
-      window.requestAnimationFrame(() => {
+    void ensurePlotly()
+      .then((plotly) => {
         window.requestAnimationFrame(() => {
-          const curveWidth = refs.plotMc.clientWidth;
-          const strainWidth = refs.plotMcStrain.clientWidth;
-          (Plotly as any).relayout(refs.plotMc, {
-            autosize: true,
-            width: curveWidth > 0 ? curveWidth : undefined,
-            height: curveHeight,
+          window.requestAnimationFrame(() => {
+            try {
+              const curveWidth = refs.plotMc.clientWidth;
+              const strainWidth = refs.plotMcStrain.clientWidth;
+              (plotly as any).relayout(refs.plotMc, {
+                autosize: true,
+                width: curveWidth > 0 ? curveWidth : undefined,
+                height: curveHeight,
+              });
+              (plotly as any).relayout(refs.plotMcStrain, {
+                autosize: true,
+                width: strainWidth > 0 ? strainWidth : undefined,
+                height: strainHeight,
+              });
+              (plotly as any).Plots.resize(refs.plotMc);
+              (plotly as any).Plots.resize(refs.plotMcStrain);
+            } catch {
+              // Plot containers may not be ready yet during early layout transitions.
+            }
           });
-          (Plotly as any).relayout(refs.plotMcStrain, {
-            autosize: true,
-            width: strainWidth > 0 ? strainWidth : undefined,
-            height: strainHeight,
-          });
-          (Plotly as any).Plots.resize(refs.plotMc);
-          (Plotly as any).Plots.resize(refs.plotMcStrain);
         });
+      })
+      .catch(() => {
+        // Plotly chunk may still be loading during early layout transitions.
       });
-    } catch {
-      // Plot containers may not be ready yet during early layout transitions.
-    }
   }, delayMs);
 }
 
@@ -7484,11 +8624,24 @@ function renderStrainDiagram(data: McData, idx: number): void {
     staticPlot: false,
   };
 
-  try {
-    (Plotly as any).react(host, [zeroTrace, strainTrace, naTrace, activeTrace], layout, config);
-  } catch (e) {
-    host.textContent = String(e);
-  }
+  showPlotLoading(host);
+  void ensurePlotly()
+    .then((plotly) => {
+      if (host.childElementCount === 0) host.textContent = "";
+      void renderPlotlyFigure(plotly as any, host, [zeroTrace, strainTrace, naTrace, activeTrace], layout, config).then(() => {
+        host.removeAttribute("aria-busy");
+        host.removeAttribute("aria-label");
+      }).catch((e) => {
+        host.removeAttribute("aria-busy");
+        host.removeAttribute("aria-label");
+        host.textContent = String(e);
+      });
+    })
+    .catch((error) => {
+      host.removeAttribute("aria-busy");
+      host.removeAttribute("aria-label");
+      host.textContent = String(error);
+    });
 }
 
 init().catch((error) => {
