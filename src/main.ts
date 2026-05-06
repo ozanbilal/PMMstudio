@@ -881,18 +881,6 @@ app.innerHTML = `
                   <span data-i18n="labelPVisualScale">3B P ekseni görsel ölçeği</span>
                   <input id="p-visual-scale" type="number" value="0.55" min="0.20" max="1.50" step="0.05" />
                 </label>
-                <label>
-                  <span data-i18n="labelSurfaceOpacity">3B yüzey saydamlığı</span>
-                  <input id="surface-opacity" type="range" value="0.88" min="0.15" max="1.00" step="0.01" />
-                  <small id="surface-opacity-value" class="range-hint">0.88</small>
-                </label>
-                <label>
-                  <span data-i18n="labelPSign">P işaret konvansiyonu</span>
-                  <select id="p-sign">
-                    <option value="compression_positive" data-i18n="optPSignPositive">Basınç (+)</option>
-                    <option value="compression_negative" data-i18n="optPSignNegative">Basınç (-) [SAP2000]</option>
-                  </select>
-                </label>
               </div>
 
               <section id="expected-strength-panel" class="expected-strength-panel hidden">
@@ -1040,6 +1028,7 @@ L3,650,90,45</textarea>
             <button id="export-surface" disabled data-i18n="btnExportSurface">PMM Nokta CSV</button>
             <button id="export-report" disabled data-i18n="btnExportReport">Rapor Word</button>
             <button id="export-report-pdf" disabled data-i18n="btnExportReportPdf">Rapor PDF</button>
+            <button id="export-report-html" disabled data-i18n="btnExportReportHtml">Rapor HTML</button>
           </div>
           <p id="rho-display" class="status rho-line"></p>
         </section>
@@ -1098,7 +1087,24 @@ L3,650,90,45</textarea>
               </table>
             </div>
           </section>
-          <div id="plot-3d" class="plot3d" role="img"></div>
+          <div class="plot3d-card">
+            <div id="plot-3d-summary" class="plot3d-summary" aria-live="polite"></div>
+            <div class="plot3d-controls">
+              <label class="compact-field plot3d-opacity-field">
+                <span data-i18n="labelSurfaceOpacity">3B yüzey saydamlığı</span>
+                <input id="surface-opacity" type="range" value="0.88" min="0.15" max="1.00" step="0.01" />
+                <small id="surface-opacity-value" class="range-hint">0.88</small>
+              </label>
+              <label class="compact-field">
+                <span data-i18n="labelPSign">P işaret konvansiyonu</span>
+                <select id="p-sign">
+                  <option value="compression_positive" data-i18n="optPSignPositive">Basınç (+)</option>
+                  <option value="compression_negative" data-i18n="optPSignNegative">Basınç (-) [SAP2000]</option>
+                </select>
+              </label>
+            </div>
+            <div id="plot-3d" class="plot3d" role="img"></div>
+          </div>
         </div>
         </section>
 
@@ -1315,6 +1321,7 @@ const refs = {
   exportSurface: must<HTMLButtonElement>("export-surface"),
   exportReport: must<HTMLButtonElement>("export-report"),
   exportReportPdf: must<HTMLButtonElement>("export-report-pdf"),
+  exportReportHtml: must<HTMLButtonElement>("export-report-html"),
   reportCompany: must<HTMLInputElement>("report-company"),
   reportDocTitle: must<HTMLInputElement>("report-doc-title"),
   reportProject: must<HTMLInputElement>("report-project"),
@@ -1346,6 +1353,7 @@ const refs = {
   sliceCopy: must<HTMLButtonElement>("slice-copy"),
   sliceMeta: must<HTMLParagraphElement>("slice-meta"),
   plot: must<HTMLCanvasElement>("plot"),
+  plot3dSummary: must<HTMLDivElement>("plot-3d-summary"),
   plot3d: must<HTMLDivElement>("plot-3d"),
   sliceBody: must<HTMLTableSectionElement>("slice-table").querySelector("tbody")!,
   tableBody: must<HTMLTableSectionElement>("results-table").querySelector("tbody")!,
@@ -1637,6 +1645,7 @@ const I18N = {
     btnExportSurface: "PMM Nokta CSV",
     btnExportReport: "Rapor Word",
     btnExportReportPdf: "Rapor PDF",
+    btnExportReportHtml: "Rapor HTML",
     statusWasmLoading: "WASM modülü yükleniyor...",
     statusWasmReady: "Hazır. Parametreleri girip hesap başlatabilirsiniz.",
     statusAciPresetApplied: "ACI 318-19 preset uygulandi: gc=1.00, gs=1.00, phiP=0.65, phiM=0.90",
@@ -1716,6 +1725,7 @@ const I18N = {
     statusReportExported: "Word raporu oluşturuldu.",
     statusReportExportEmpty: "Rapor için önce PMM analizi çalıştırın.",
     statusReportPdfExported: "PDF yazdırma önizlemesi açıldı.",
+    statusReportHtmlExported: "İnteraktif HTML raporu oluşturuldu.",
     statusReportMetaMissing: "Rapor için en az Proje adı ve Rapor tarihi alanlarını doldurun.",
     statusReportLogoLoaded: "Kurumsal logo rapora eklenecek şekilde yüklendi.",
     statusReportLogoInvalidType: "Logo yalnızca PNG, JPEG veya WEBP olabilir.",
@@ -1898,6 +1908,7 @@ const I18N = {
     btnExportSurface: "PMM Points CSV",
     btnExportReport: "Word Report",
     btnExportReportPdf: "PDF Report",
+    btnExportReportHtml: "HTML Report",
     statusWasmLoading: "Loading WASM module...",
     statusWasmReady: "Ready. Enter parameters and run analysis.",
     statusAciPresetApplied: "ACI 318-19 preset applied: gc=1.00, gs=1.00, phiP=0.65, phiM=0.90",
@@ -1977,6 +1988,7 @@ const I18N = {
     statusReportExported: "Word report generated.",
     statusReportExportEmpty: "Run PMM analysis before exporting report.",
     statusReportPdfExported: "PDF print preview opened.",
+    statusReportHtmlExported: "Interactive HTML report generated.",
     statusReportMetaMissing: "Fill at least Project name and Report date before export.",
     statusReportLogoLoaded: "Corporate logo loaded and will be included in report.",
     statusReportLogoInvalidType: "Logo must be PNG, JPEG, or WEBP.",
@@ -2444,6 +2456,7 @@ async function init(): Promise<void> {
   refs.exportSurface.addEventListener("click", exportSurfaceCsv);
   refs.exportReport.addEventListener("click", () => exportWordReport().catch(showError));
   refs.exportReportPdf.addEventListener("click", () => exportPdfReport().catch(showError));
+  refs.exportReportHtml.addEventListener("click", () => exportInteractiveHtmlReport().catch(showError));
   refs.mcRunBtn.addEventListener("click", () => runMomentCurvature().catch((error) => {
     showError(error);
     showToast(String(error instanceof Error ? error.message : error), "danger");
@@ -4196,6 +4209,7 @@ async function runAnalysis(): Promise<void> {
   refs.exportSurface.disabled = false;
   refs.exportReport.disabled = false;
   refs.exportReportPdf.disabled = false;
+  refs.exportReportHtml.disabled = false;
 
   const maxDcr = Math.max(...results.map((r) => r.dcr));
   const failCount = compliance.filter((c) => c.status === "fail").length;
@@ -4958,7 +4972,7 @@ interface PlotPalette {
 function getPlotPalette(): PlotPalette {
   if (state.theme === "light") {
     return {
-      bg: "#f7fbff",
+      bg: "#ffffff",
       cloud: "rgba(26, 133, 142, 0.45)",
       mesh: "rgba(42, 102, 120, 0.28)",
       nominalCloud: "rgba(73, 116, 220, 0.34)",
@@ -5522,6 +5536,39 @@ function buildProjectedEnvelope(surface: PmmPoint[], projection: "p-mx" | "p-my"
   );
 }
 
+function buildMxMyEnvelope(surface: PmmPoint[]): EnvelopePoint[] {
+  return buildConvexEnvelope(
+    surface.map((point) => ({
+      x: point.mx,
+      y: point.my,
+    }))
+  );
+}
+
+function drawClosedEnvelope(
+  ctx: CanvasRenderingContext2D,
+  points: EnvelopePoint[],
+  sx: (v: number) => number,
+  sy: (v: number) => number,
+  color: string,
+  width: number,
+  dash: number[] = []
+): void {
+  if (points.length < 2) return;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.setLineDash(dash);
+  ctx.beginPath();
+  points.forEach((point, index) => {
+    if (index === 0) ctx.moveTo(sx(point.x), sy(point.y));
+    else ctx.lineTo(sx(point.x), sy(point.y));
+  });
+  ctx.closePath();
+  ctx.stroke();
+  ctx.restore();
+}
+
 function renderAxisPmmPlot(ctx: CanvasRenderingContext2D, w: number, h: number, pal: PlotPalette, results: ResultRow[], projection: "p-mx" | "p-my"): void {
   const isMx = projection === "p-mx";
   const designCurve = buildProjectedEnvelope(state.surface, projection);
@@ -5562,26 +5609,11 @@ function renderAxisPmmPlot(ctx: CanvasRenderingContext2D, w: number, h: number, 
   const sy = (v: number): number => plotBottom - (((v - by0) / (by1 - by0)) * plotHeight);
 
   drawGrid(ctx, xTicks, yTicks, sx, sy, plotLeft, plotTop, plotRight, plotBottom, pal);
-  const drawClosedCurve = (points: EnvelopePoint[], color: string, width: number, dash: number[] = []): void => {
-    if (points.length < 2) return;
-    ctx.save();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = width;
-    ctx.setLineDash(dash);
-    ctx.beginPath();
-    points.forEach((point, index) => {
-      if (index === 0) ctx.moveTo(sx(point.x), sy(point.y));
-      else ctx.lineTo(sx(point.x), sy(point.y));
-    });
-    ctx.closePath();
-    ctx.stroke();
-    ctx.restore();
-  };
   const curveColor = isMx ? "#e8aa00" : "#d93232";
   if (nominalCurve.length > 1) {
-    drawClosedCurve(nominalCurve, "rgba(15, 127, 153, 0.36)", 1.6, [7, 5]);
+    drawClosedEnvelope(ctx, nominalCurve, sx, sy, "rgba(15, 127, 153, 0.36)", 1.6, [7, 5]);
   }
-  drawClosedCurve(designCurve, curveColor, 3.0);
+  drawClosedEnvelope(ctx, designCurve, sx, sy, curveColor, 3.0);
 
   for (const point of loads) {
     ctx.fillStyle = point.ok ? pal.loadOk : pal.loadNg;
@@ -5652,32 +5684,16 @@ function renderCombinedPmmPlot(ctx: CanvasRenderingContext2D, w: number, h: numb
 
   drawGrid(ctx, xTicks, yTicks, sx, sy, plotLeft, plotTop, plotRight, plotBottom, pal);
 
-  const drawCurve = (points: EnvelopePoint[], color: string, width: number, dash: number[] = []): void => {
-    if (points.length < 2) return;
-    ctx.save();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = width;
-    ctx.setLineDash(dash);
-    ctx.beginPath();
-    points.forEach((point, index) => {
-      if (index === 0) ctx.moveTo(sx(point.x), sy(point.y));
-      else ctx.lineTo(sx(point.x), sy(point.y));
-    });
-    ctx.closePath();
-    ctx.stroke();
-    ctx.restore();
-  };
-
   const mxColor = "#e8aa00";
   const myColor = "#d93232";
   if (nominalMxCurve.length > 1) {
-    drawCurve(nominalMxCurve, "rgba(232, 170, 0, 0.45)", 1.7, [7, 5]);
+    drawClosedEnvelope(ctx, nominalMxCurve, sx, sy, "rgba(232, 170, 0, 0.45)", 1.7, [7, 5]);
   }
   if (nominalMyCurve.length > 1) {
-    drawCurve(nominalMyCurve, "rgba(217, 50, 50, 0.45)", 1.7, [7, 5]);
+    drawClosedEnvelope(ctx, nominalMyCurve, sx, sy, "rgba(217, 50, 50, 0.45)", 1.7, [7, 5]);
   }
-  drawCurve(myCurve, myColor, 3.4);
-  drawCurve(mxCurve, mxColor, 3.0);
+  drawClosedEnvelope(ctx, myCurve, sx, sy, myColor, 3.4);
+  drawClosedEnvelope(ctx, mxCurve, sx, sy, mxColor, 3.0);
 
   for (const point of muxLoads) {
     ctx.fillStyle = point.ok ? mxColor : pal.loadNg;
@@ -5740,6 +5756,76 @@ function renderCombinedPmmPlot(ctx: CanvasRenderingContext2D, w: number, h: numb
   }
 }
 
+function renderMxMyEnvelopePlot(ctx: CanvasRenderingContext2D, w: number, h: number, pal: PlotPalette, results: ResultRow[]): void {
+  const designCurve = buildMxMyEnvelope(state.surface);
+  if (designCurve.length < 2) return;
+  const nominalCurve = state.showNominalSurface ? buildMxMyEnvelope(state.nominalSurface) : [];
+  const loads = results.map((r) => ({
+    x: r.mux,
+    y: r.muy,
+    ok: r.ok,
+  }));
+  const allPoints = [
+    ...designCurve,
+    ...nominalCurve,
+    ...loads,
+  ];
+  const xs = allPoints.map((p) => p.x);
+  const ys = allPoints.map((p) => p.y);
+  const xMin = Math.min(...xs);
+  const xMax = Math.max(...xs);
+  const yMin = Math.min(...ys);
+  const yMax = Math.max(...ys);
+  const padX = (xMax - xMin || 1) * 0.08;
+  const padY = (yMax - yMin || 1) * 0.08;
+  const xTicks = buildNiceTicks(xMin - padX, xMax + padX, 9);
+  const yTicks = buildNiceTicks(yMin - padY, yMax + padY, 7);
+  const bx0 = xTicks[0];
+  const bx1 = xTicks[xTicks.length - 1];
+  const by0 = yTicks[0];
+  const by1 = yTicks[yTicks.length - 1];
+  const plotLeft = 76;
+  const plotRight = w - 36;
+  const plotTop = 36;
+  const plotBottom = h - 58;
+  const plotWidth = Math.max(10, plotRight - plotLeft);
+  const plotHeight = Math.max(10, plotBottom - plotTop);
+  const sx = (v: number): number => ((v - bx0) / (bx1 - bx0)) * plotWidth + plotLeft;
+  const sy = (v: number): number => plotBottom - (((v - by0) / (by1 - by0)) * plotHeight);
+
+  drawGrid(ctx, xTicks, yTicks, sx, sy, plotLeft, plotTop, plotRight, plotBottom, pal);
+  if (nominalCurve.length > 1) {
+    drawClosedEnvelope(ctx, nominalCurve, sx, sy, "rgba(15, 127, 153, 0.34)", 1.7, [7, 5]);
+  }
+  drawClosedEnvelope(ctx, designCurve, sx, sy, "#178a9b", 3.1);
+
+  for (const point of loads) {
+    ctx.fillStyle = point.ok ? pal.loadOk : pal.loadNg;
+    ctx.strokeStyle = "rgba(23, 48, 63, 0.65)";
+    ctx.lineWidth = 0.9;
+    ctx.beginPath();
+    ctx.arc(sx(point.x), sy(point.y), 4.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle = pal.border;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(plotLeft, plotTop, plotWidth, plotHeight);
+  ctx.fillStyle = pal.label;
+  ctx.font = "14px 'IBM Plex Sans'";
+  ctx.textAlign = "right";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText("Mx (kNm)", plotRight, h - 12);
+  ctx.save();
+  ctx.translate(18, (plotTop + plotBottom) * 0.5);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.fillText("My (kNm)", 0, 0);
+  ctx.restore();
+}
+
 function renderPlot(surface: PmmPoint[], results: ResultRow[]): void {
   const prepared = prepareCanvasContext(refs.plot);
   if (!prepared) return;
@@ -5758,6 +5844,10 @@ function renderPlot(surface: PmmPoint[], results: ResultRow[]): void {
   }
   if (projection === "p-mx" || projection === "p-my") {
     renderAxisPmmPlot(ctx, w, h, pal, results, projection);
+    return;
+  }
+  if (projection === "mx-my") {
+    renderMxMyEnvelopePlot(ctx, w, h, pal, results);
     return;
   }
   const pSignFactor = readCurrentPSignFactor();
@@ -5874,11 +5964,60 @@ function renderPlot(surface: PmmPoint[], results: ResultRow[]): void {
   ctx.fillText(yLabel, 0, 0);
   ctx.restore();
 }
+function renderPlot3dSummary(surface: PmmPoint[], results: ResultRow[], shellPointCount: number): void {
+  const host = refs.plot3dSummary;
+  if (surface.length === 0 || shellPointCount <= 0) {
+    host.innerHTML = `<div class="plot3d-summary-empty">${localizeText("PMM yüzeyi henüz üretilmedi.", "PMM surface has not been generated yet.")}</div>`;
+    return;
+  }
+  const pSignFactor = readCurrentPSignFactor();
+  const pValues = surface.map((point) => point.p * pSignFactor).filter(Number.isFinite);
+  const pMin = pValues.length > 0 ? Math.min(...pValues) : NaN;
+  const pMax = pValues.length > 0 ? Math.max(...pValues) : NaN;
+  const okCount = results.filter((row) => row.ok).length;
+  const failCount = Math.max(0, results.length - okCount);
+  const dcrValues = results.map((row) => row.dcr).filter(Number.isFinite);
+  const maxDcr = dcrValues.length > 0 ? Math.max(...dcrValues) : NaN;
+  const statusClass = results.length === 0 ? "neutral" : failCount === 0 ? "ok" : "bad";
+  const statusText = results.length === 0
+    ? localizeText("Yük yok", "No loads")
+    : failCount === 0
+      ? localizeText("Tüm yükler geçiyor", "All loads pass")
+      : localizeText(`${failCount} yük uygunsuz`, `${failCount} load${failCount === 1 ? "" : "s"} fail`);
+  const nominalText = state.showNominalSurface && state.nominalSurface.length > 0
+    ? localizeText(`Nominal açık: ${state.nominalSurface.length} nokta`, `Nominal on: ${state.nominalSurface.length} points`)
+    : localizeText("Nominal kapalı", "Nominal off");
+
+  host.innerHTML = `
+    <div class="plot3d-summary-item">
+      <span>${localizeText("PMM noktası", "PMM points")}</span>
+      <strong>${surface.length.toLocaleString(currentLocale())}</strong>
+      <small>${state.angleCount} x ${state.depthCount} ${localizeText("kabuk", "shell")}</small>
+    </div>
+    <div class="plot3d-summary-item plot3d-summary-item--${statusClass}">
+      <span>${localizeText("Yük kontrolü", "Load check")}</span>
+      <strong>${results.length > 0 ? `${okCount}/${results.length}` : "-"}</strong>
+      <small>${statusText}</small>
+    </div>
+    <div class="plot3d-summary-item">
+      <span>${localizeText("Maks DCR", "Max DCR")}</span>
+      <strong>${Number.isFinite(maxDcr) ? fmt(maxDcr, 3) : "-"}</strong>
+      <small>${nominalText}</small>
+    </div>
+    <div class="plot3d-summary-item">
+      <span>${localizeText("P aralığı", "P range")}</span>
+      <strong>${Number.isFinite(pMax) ? fmt(pMax, 0) : "-"} kN</strong>
+      <small>${Number.isFinite(pMin) ? fmt(pMin, 0) : "-"} kN min</small>
+    </div>
+  `;
+}
+
 function renderPlot3d(surface: PmmPoint[], results: ResultRow[]): void {
   const host = refs.plot3d;
   const angleCount = state.angleCount;
   const depthCount = state.depthCount;
   const shellPointCount = angleCount * depthCount;
+  renderPlot3dSummary(surface, results, shellPointCount);
 
   if (shellPointCount <= 0 || surface.length < shellPointCount) {
     host.innerHTML = "";
@@ -5889,6 +6028,7 @@ function renderPlot3d(surface: PmmPoint[], results: ResultRow[]): void {
   const pSignFactor = readCurrentPSignFactor();
   const pVisualScale = readCurrentPVisualScale();
   const surfaceOpacity = readCurrentSurfaceOpacity();
+  const designOpacity = Math.max(0.46, Math.min(0.78, surfaceOpacity));
   const showNominalSurface = state.showNominalSurface && state.nominalSurface.length >= shellPointCount;
   const buildSurfaceGrid = (source: PmmPoint[]): { x: number[][]; y: number[][]; z: number[][] } | null => {
     if (source.length < shellPointCount) return null;
@@ -5935,17 +6075,31 @@ function renderPlot3d(surface: PmmPoint[], results: ResultRow[]): void {
         y: nominalGrid.y,
         z: nominalGrid.z,
         showscale: false,
-        opacity: Math.max(0.18, Math.min(0.42, surfaceOpacity * 0.5)),
+        opacity: Math.max(0.12, Math.min(0.24, surfaceOpacity * 0.32)),
         colorscale: [
-          [0, "#4d79ff"],
-          [0.55, "#6c9bff"],
-          [1, "#a9c2ff"],
+          [0, "#5787ff"],
+          [0.55, "#8eb0ff"],
+          [1, "#d5e1ff"],
         ],
+        lighting: { ambient: 0.78, diffuse: 0.62, specular: 0.04, roughness: 0.9, fresnel: 0.05 },
+        lightposition: { x: 160, y: -260, z: 700 },
         contours: {
-          z: {
-            show: true,
+          x: {
+            show: false,
             usecolormap: false,
-            color: "rgba(220, 232, 255, 0.34)",
+            color: "rgba(74, 110, 190, 0.26)",
+            width: 1,
+          },
+          y: {
+            show: false,
+            usecolormap: false,
+            color: "rgba(74, 110, 190, 0.22)",
+            width: 1,
+          },
+          z: {
+            show: false,
+            usecolormap: false,
+            color: "rgba(74, 110, 190, 0.28)",
             width: 1,
           },
         },
@@ -5963,17 +6117,31 @@ function renderPlot3d(surface: PmmPoint[], results: ResultRow[]): void {
     y: designGrid.y,
     z: designGrid.z,
     showscale: false,
-    opacity: surfaceOpacity,
+    opacity: designOpacity,
     colorscale: [
-      [0, "#d1ae62"],
-      [0.55, "#e2bf72"],
-      [1, "#f0d98d"],
+      [0, "#b7791f"],
+      [0.48, "#d69e2e"],
+      [1, "#f6d76b"],
     ],
+    lighting: { ambient: 0.68, diffuse: 0.78, specular: 0.08, roughness: 0.82, fresnel: 0.08 },
+    lightposition: { x: 180, y: -280, z: 760 },
     contours: {
-      z: {
-        show: true,
+      x: {
+        show: false,
         usecolormap: false,
-        color: "rgba(240, 248, 255, 0.38)",
+        color: "rgba(108, 76, 22, 0.32)",
+        width: 1,
+      },
+      y: {
+        show: false,
+        usecolormap: false,
+        color: "rgba(108, 76, 22, 0.26)",
+        width: 1,
+      },
+      z: {
+        show: false,
+        usecolormap: false,
+        color: "rgba(255, 252, 232, 0.58)",
         width: 1,
       },
     },
@@ -5983,19 +6151,43 @@ function renderPlot3d(surface: PmmPoint[], results: ResultRow[]): void {
         : "Tasarım PMM<br>P: %{z:.1f} kN<br>Mx: %{x:.1f} kNm<br>My: %{y:.1f} kNm<extra></extra>",
   });
 
+  if (results.length > 0) {
+    const lineX: Array<number | null> = [];
+    const lineY: Array<number | null> = [];
+    const lineZ: Array<number | null> = [];
+    for (const row of results) {
+      lineX.push(0, row.mux, null);
+      lineY.push(0, row.muy, null);
+      lineZ.push(0, row.pu * pSignFactor, null);
+    }
+    traces.push({
+      type: "scatter3d",
+      mode: "lines",
+      name: state.lang === "en" ? "Load vectors" : "Yük vektörleri",
+      x: lineX,
+      y: lineY,
+      z: lineZ,
+      line: { color: state.theme === "light" ? "rgba(24, 83, 104, 0.42)" : "rgba(142, 220, 230, 0.36)", width: 5 },
+      hoverinfo: "skip",
+      showlegend: false,
+    });
+  }
+
   traces.push({
     type: "scatter3d",
     mode: "markers+text",
+    name: state.lang === "en" ? "Load points" : "Yük noktaları",
     x: results.map((r) => r.mux),
     y: results.map((r) => r.muy),
     z: results.map((r) => r.pu * pSignFactor),
     text: results.map((r) => r.name),
     textposition: "top center",
-    textfont: { color: state.theme === "light" ? "#1c3d4b" : "#cde6eb", size: 10 },
+    textfont: { color: state.theme === "light" ? "#17323d" : "#e2fbff", size: 12 },
     marker: {
-      size: 4,
-      color: results.map((r) => (r.ok ? "#8ff7a7" : "#ff7f7f")),
-      line: { color: "#052130", width: 1 },
+      size: 7,
+      opacity: 1,
+      color: results.map((r) => (r.ok ? "#19a35b" : "#d43d3d")),
+      line: { color: state.theme === "light" ? "#ffffff" : "#071923", width: 2 },
     },
     hovertemplate:
       state.lang === "en"
@@ -6003,10 +6195,11 @@ function renderPlot3d(surface: PmmPoint[], results: ResultRow[]): void {
         : "%{text}<br>Pu: %{z:.1f} kN<br>Mux: %{x:.1f} kNm<br>Muy: %{y:.1f} kNm<extra></extra>",
   });
 
-  const sceneBg = state.theme === "light" ? "#f7fbff" : "#06111a";
+  const sceneBg = state.theme === "light" ? "#f4f8fb" : "#06111a";
   const sceneColor = state.theme === "light" ? "#17323d" : "#cde6eb";
-  const sceneGrid = state.theme === "light" ? "rgba(41, 74, 88, 0.18)" : "rgba(159, 197, 202, 0.20)";
-  const sceneZero = state.theme === "light" ? "rgba(183, 112, 56, 0.45)" : "rgba(249, 177, 112, 0.45)";
+  const sceneGrid = state.theme === "light" ? "rgba(41, 74, 88, 0.24)" : "rgba(159, 197, 202, 0.22)";
+  const sceneZero = state.theme === "light" ? "rgba(183, 112, 56, 0.58)" : "rgba(249, 177, 112, 0.52)";
+  const sceneAxisBg = state.theme === "light" ? "rgba(238, 245, 249, 0.82)" : "rgba(9, 20, 30, 0.86)";
   const hostWidth = Math.max(0, Math.round(host.getBoundingClientRect().width || host.clientWidth));
   const hostHeight = Math.max(360, Math.round(host.getBoundingClientRect().height || host.clientHeight || 520));
   const zTitle = state.lang === "en"
@@ -6024,25 +6217,33 @@ function renderPlot3d(surface: PmmPoint[], results: ResultRow[]): void {
       aspectmode: "manual",
       aspectratio: { x: 1, y: 1, z: pVisualScale },
       camera: {
-        eye: { x: 1.45, y: -1.35, z: 0.9 },
+        eye: { x: 1.55, y: -1.75, z: 1.05 },
+        up: { x: 0, y: 0, z: 1 },
+        projection: { type: "orthographic" },
       },
       xaxis: {
         title: "Mx (kNm)",
         color: sceneColor,
         gridcolor: sceneGrid,
         zerolinecolor: sceneZero,
+        showbackground: true,
+        backgroundcolor: sceneAxisBg,
       },
       yaxis: {
         title: "My (kNm)",
         color: sceneColor,
         gridcolor: sceneGrid,
         zerolinecolor: sceneZero,
+        showbackground: true,
+        backgroundcolor: sceneAxisBg,
       },
       zaxis: {
         title: zTitle,
         color: sceneColor,
         gridcolor: sceneGrid,
         zerolinecolor: sceneZero,
+        showbackground: true,
+        backgroundcolor: sceneAxisBg,
       },
     },
   };
@@ -7609,6 +7810,7 @@ function clearAnalysisOutputs(): void {
   refs.exportSurface.disabled = true;
   refs.exportReport.disabled = true;
   refs.exportReportPdf.disabled = true;
+  refs.exportReportHtml.disabled = true;
   clearMomentCurvatureOutputs();
   renderPlot([], []);
   renderPlot3d([], []);
@@ -8362,6 +8564,321 @@ function buildReportHtml(snapshot: ReportSnapshot, printMode: boolean): string {
   <div class="report">
     ${sectionBlocks.join("\n")}
   </div>
+  </body>
+</html>`;
+}
+
+function jsonForHtmlScript(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
+function buildInteractiveSurfaceGrid(source: PmmPoint[], angleCount: number, depthCount: number, pSignFactor: number): { x: number[][]; y: number[][]; z: number[][] } | null {
+  const shellPointCount = angleCount * depthCount;
+  if (shellPointCount <= 0 || source.length < shellPointCount) return null;
+  const x: number[][] = [];
+  const y: number[][] = [];
+  const z: number[][] = [];
+  for (let ai = 0; ai < angleCount; ai++) {
+    const rowX: number[] = [];
+    const rowY: number[] = [];
+    const rowZ: number[] = [];
+    for (let di = 0; di < depthCount; di++) {
+      const point = source[ai * depthCount + di];
+      rowX.push(point.mx);
+      rowY.push(point.my);
+      rowZ.push(point.p * pSignFactor);
+    }
+    x.push(rowX);
+    y.push(rowY);
+    z.push(rowZ);
+  }
+  if (x.length > 0) {
+    x.push([...x[0]]);
+    y.push([...y[0]]);
+    z.push([...z[0]]);
+  }
+  return { x, y, z };
+}
+
+function buildInteractiveReportHtml(snapshot: ReportSnapshot): string {
+  const generatedAt = new Date().toLocaleString(currentLocale());
+  const reportLang = state.lang === "en" ? "en" : "tr";
+  const docTitle = snapshot.meta.documentTitle || reportText("Kolon PMM Etkileşimli Raporu", "Column PMM Interactive Report");
+  const pSignFactor = pSignFactorForMode(snapshot.input.pSignMode);
+  const designGrid = buildInteractiveSurfaceGrid(state.surface, snapshot.input.nAngle, snapshot.input.nDepth, pSignFactor);
+  const nominalGrid = state.showNominalSurface
+    ? buildInteractiveSurfaceGrid(state.nominalSurface, snapshot.input.nAngle, snapshot.input.nDepth, pSignFactor)
+    : null;
+  const pMxEnvelope = buildProjectedEnvelope(state.surface, "p-mx");
+  const pMyEnvelope = buildProjectedEnvelope(state.surface, "p-my");
+  const mxMyEnvelope = buildMxMyEnvelope(state.surface);
+  const nominalPMxEnvelope = state.showNominalSurface ? buildProjectedEnvelope(state.nominalSurface, "p-mx") : [];
+  const nominalPMyEnvelope = state.showNominalSurface ? buildProjectedEnvelope(state.nominalSurface, "p-my") : [];
+  const nominalMxMyEnvelope = state.showNominalSurface ? buildMxMyEnvelope(state.nominalSurface) : [];
+  const okCount = snapshot.results.filter((row) => row.ok).length;
+  const failLoadCount = Math.max(0, snapshot.results.length - okCount);
+  const interactiveData = {
+    lang: state.lang,
+    labels: {
+      pmm3d: reportText("3B PMM yüzeyi", "3D PMM surface"),
+      pMx: "P - Mx",
+      pMy: "P - My",
+      mxMy: "Mx - My",
+      mphi0: reportText("Moment-Eğrilik 0°", "Moment-Curvature 0°"),
+      mphi90: reportText("Moment-Eğrilik 90°", "Moment-Curvature 90°"),
+      design: reportText("Tasarım zarfı", "Design envelope"),
+      nominal: reportText("Nominal zarf", "Nominal envelope"),
+      loads: reportText("Yük noktaları", "Load points"),
+      pAxis: pSignFactor < 0 ? "P (kN, basınç -)" : "P (kN, B+)",
+    },
+    summary: {
+      points: state.surface.length,
+      nominalPoints: state.showNominalSurface ? state.nominalSurface.length : 0,
+      loads: snapshot.results.length,
+      okLoads: okCount,
+      failedLoads: failLoadCount,
+      maxDcr: snapshot.maxDcr,
+      minDcr: snapshot.minDcr,
+    },
+    designGrid,
+    nominalGrid,
+    pMxEnvelope,
+    pMyEnvelope,
+    mxMyEnvelope,
+    nominalPMxEnvelope,
+    nominalPMyEnvelope,
+    nominalMxMyEnvelope,
+    loads: snapshot.results.map((row) => ({
+      name: row.name,
+      pu: row.pu,
+      p: row.pu * pSignFactor,
+      mux: row.mux,
+      muy: row.muy,
+      dcr: row.dcr,
+      ok: row.ok,
+    })),
+    mphi0: {
+      phi: snapshot.mphi0.data.phi,
+      moment: snapshot.mphi0.data.moment,
+      key: snapshot.mphi0.keyPoints,
+    },
+    mphi90: {
+      phi: snapshot.mphi90.data.phi,
+      moment: snapshot.mphi90.data.moment,
+      key: snapshot.mphi90.keyPoints,
+    },
+  };
+  const resultRows = snapshot.sectionReports.map((sectionReport) => `
+    <section class="section">
+      <h2>${escapeHtml(sectionReport.section.name)} - ${escapeHtml(reportText("Yük Sonuçları", "Load Results"))}</h2>
+      <table>
+        <thead><tr><th>Yük</th><th>Pu</th><th>Mux</th><th>Muy</th><th>Pcap</th><th>Mxcap</th><th>Mycap</th><th>Scale</th><th>DCR</th><th>Durum</th></tr></thead>
+        <tbody>${renderSectionResultRows(sectionReport.results) || `<tr><td colspan="10">-</td></tr>`}</tbody>
+      </table>
+    </section>
+  `).join("");
+  const sectionSummaries = snapshot.sectionReports.map(renderSectionReportSummary).join("");
+  const dataJson = jsonForHtmlScript(interactiveData);
+
+  return `<!doctype html>
+<html lang="${reportLang}">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(docTitle)} - HTML</title>
+  <script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>
+  <style>
+    :root { --ink:#10283a; --muted:#5d7080; --line:#d6e0e8; --soft:#f4f8fb; --accent:#0f7f99; --amber:#d79a10; --red:#d93232; --ok:#17894f; --bad:#c93636; }
+    * { box-sizing:border-box; }
+    html, body { margin:0; min-height:100%; background:#ffffff; color:var(--ink); font-family:"IBM Plex Sans", "Segoe UI", Arial, sans-serif; }
+    body { padding:24px; }
+    .report { max-width:1440px; margin:0 auto; }
+    .hero { border:1px solid var(--line); border-radius:18px; padding:22px 24px; background:#ffffff; box-shadow:0 12px 30px rgba(32,52,70,0.08); }
+    .kicker { margin:0 0 6px; color:var(--muted); font-size:12px; letter-spacing:.14em; text-transform:uppercase; }
+    h1 { margin:0; font-size:32px; line-height:1.12; }
+    h2 { margin:0 0 12px; font-size:20px; }
+    .subtitle { color:var(--muted); margin:8px 0 0; }
+    .summary-grid { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; margin:16px 0 0; }
+    .summary-chip { border:1px solid var(--line); border-radius:14px; padding:11px 12px; background:var(--soft); }
+    .summary-chip .k { display:block; color:var(--muted); font-size:12px; margin-bottom:4px; }
+    .summary-chip .v { display:block; font-weight:800; font-size:17px; }
+    .summary-chip.ok { border-color:rgba(23,137,79,.35); background:#eefaf3; }
+    .summary-chip.bad { border-color:rgba(201,54,54,.35); background:#fff1f1; }
+    .section { margin-top:18px; border:1px solid var(--line); border-radius:18px; padding:16px; background:#ffffff; box-shadow:0 8px 22px rgba(32,52,70,0.05); }
+    .plot-grid { display:grid; grid-template-columns:1.25fr 1fr; gap:14px; align-items:stretch; }
+    .plot-card { min-height:430px; border:1px solid var(--line); border-radius:14px; padding:10px; background:#ffffff; }
+    .plot-card.tall { min-height:560px; }
+    .plot { width:100%; height:100%; min-height:400px; }
+    .plot.tall { min-height:530px; }
+    table { width:100%; border-collapse:collapse; background:#ffffff; }
+    th, td { border:1px solid var(--line); padding:7px 8px; font-size:12px; text-align:right; }
+    th:first-child, td:first-child { text-align:left; }
+    thead th { background:var(--soft); font-weight:800; }
+    .section-note { color:var(--muted); margin:0 0 12px; }
+    .small { color:var(--muted); font-size:12px; }
+    .warning { display:none; margin-top:12px; padding:10px 12px; border:1px solid #f1c37a; border-radius:12px; background:#fff7e7; color:#7a4b00; }
+    @media (max-width: 980px) {
+      body { padding:12px; }
+      .summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .plot-grid { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="report">
+    <header class="hero">
+      <p class="kicker">PMMstudio interactive report</p>
+      <h1>${escapeHtml(docTitle)}</h1>
+      <p class="subtitle">${escapeHtml(snapshot.meta.project)} · ${escapeHtml(formatIsoDateForDisplay(snapshot.meta.reportDate))} · ${escapeHtml(generatedAt)}</p>
+      <div class="summary-grid">
+        <div class="summary-chip"><span class="k">${escapeHtml(reportText("PMM noktası", "PMM points"))}</span><span class="v">${fmt(state.surface.length, 0)}</span></div>
+        <div class="summary-chip"><span class="k">${escapeHtml(reportText("Yük kontrolü", "Load check"))}</span><span class="v">${okCount}/${snapshot.results.length}</span></div>
+        <div class="summary-chip ${failLoadCount > 0 ? "bad" : "ok"}"><span class="k">${escapeHtml(reportText("Durum", "Status"))}</span><span class="v">${escapeHtml(failLoadCount > 0 ? reportText("Uygunsuz var", "Has failures") : reportText("Tümü geçiyor", "All pass"))}</span></div>
+        <div class="summary-chip"><span class="k">DCR max</span><span class="v">${fmt(snapshot.maxDcr, 4)}</span></div>
+        <div class="summary-chip"><span class="k">${escapeHtml(reportText("Kesit sayısı", "Sections"))}</span><span class="v">${fmt(snapshot.sectionReports.length, 0)}</span></div>
+        <div class="summary-chip"><span class="k">${escapeHtml(reportText("Nominal", "Nominal"))}</span><span class="v">${state.showNominalSurface ? reportText("Açık", "On") : reportText("Kapalı", "Off")}</span></div>
+      </div>
+      <p id="plot-warning" class="warning">${escapeHtml(reportText("Plotly yüklenemedi. Etkileşimli grafikler için internet bağlantısı veya Plotly erişimi gerekir.", "Plotly could not be loaded. Interactive charts require internet access or Plotly availability."))}</p>
+    </header>
+
+    <section class="section">
+      <h2>${escapeHtml(reportText("Etkileşimli PMM grafikleri", "Interactive PMM charts"))}</h2>
+      <p class="section-note">${escapeHtml(reportText("Grafikler tarayıcı içinde zoom/pan/hover destekler. 3B yüzey döndürülebilir.", "Charts support zoom/pan/hover in the browser. The 3D surface can be rotated."))}</p>
+      <div class="plot-grid">
+        <div class="plot-card tall"><div id="plot-3d" class="plot tall"></div></div>
+        <div class="plot-card"><div id="plot-pmx" class="plot"></div></div>
+        <div class="plot-card"><div id="plot-pmy" class="plot"></div></div>
+        <div class="plot-card"><div id="plot-mxmy" class="plot"></div></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>${escapeHtml(reportText("Moment-Eğrilik", "Moment-Curvature"))}</h2>
+      <div class="plot-grid">
+        <div class="plot-card"><div id="plot-mphi0" class="plot"></div></div>
+        <div class="plot-card"><div id="plot-mphi90" class="plot"></div></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>${escapeHtml(reportText("Kesit özetleri", "Section summaries"))}</h2>
+      ${sectionSummaries}
+    </section>
+
+    ${resultRows}
+  </main>
+  <script id="report-data" type="application/json">${dataJson}</script>
+  <script>
+    (function () {
+      var data = JSON.parse(document.getElementById("report-data").textContent);
+      var warning = document.getElementById("plot-warning");
+      if (!window.Plotly) {
+        warning.style.display = "block";
+        return;
+      }
+      var font = { family: "IBM Plex Sans, Segoe UI, Arial, sans-serif", color: "#10283a" };
+      var config = { responsive: true, displaylogo: false, scrollZoom: true };
+      function xy(curve) {
+        return { x: curve.map(function (p) { return p.x; }), y: curve.map(function (p) { return p.y; }) };
+      }
+      function closedLine(curve, name, color, dash) {
+        var pts = curve.slice();
+        if (pts.length > 0) pts.push(pts[0]);
+        var v = xy(pts);
+        return { type: "scatter", mode: "lines", x: v.x, y: v.y, name: name, line: { color: color, width: 3, dash: dash || "solid" } };
+      }
+      function loadTrace(xKey, yKey, name) {
+        return {
+          type: "scatter",
+          mode: "markers+text",
+          x: data.loads.map(function (p) { return p[xKey]; }),
+          y: data.loads.map(function (p) { return p[yKey]; }),
+          text: data.loads.map(function (p) { return p.name; }),
+          textposition: "top center",
+          name: name,
+          marker: { size: 10, color: data.loads.map(function (p) { return p.ok ? "#17894f" : "#c93636"; }), line: { color: "#ffffff", width: 1.8 } },
+          hovertemplate: "%{text}<br>x=%{x:.1f}<br>y=%{y:.1f}<extra></extra>"
+        };
+      }
+      function layout2d(title, xTitle, yTitle) {
+        return {
+          title: { text: title, x: 0.02, xanchor: "left" },
+          paper_bgcolor: "#ffffff",
+          plot_bgcolor: "#ffffff",
+          margin: { l: 72, r: 24, t: 54, b: 64 },
+          font: font,
+          xaxis: { title: xTitle, gridcolor: "rgba(16,40,58,0.12)", zerolinecolor: "rgba(183,112,56,0.45)" },
+          yaxis: { title: yTitle, gridcolor: "rgba(16,40,58,0.12)", zerolinecolor: "rgba(183,112,56,0.45)" },
+          legend: { orientation: "h", y: -0.18 }
+        };
+      }
+      Plotly.newPlot("plot-pmx", [
+        closedLine(data.nominalPMxEnvelope, data.labels.nominal, "rgba(15,127,153,0.38)", "dash"),
+        closedLine(data.pMxEnvelope, data.labels.design, "#d79a10"),
+        loadTrace("mux", "p", data.labels.loads)
+      ].filter(function (t) { return t.x.length > 0; }), layout2d(data.labels.pMx, "Mx (kNm)", data.labels.pAxis), config);
+      Plotly.newPlot("plot-pmy", [
+        closedLine(data.nominalPMyEnvelope, data.labels.nominal, "rgba(15,127,153,0.38)", "dash"),
+        closedLine(data.pMyEnvelope, data.labels.design, "#d93232"),
+        loadTrace("muy", "p", data.labels.loads)
+      ].filter(function (t) { return t.x.length > 0; }), layout2d(data.labels.pMy, "My (kNm)", data.labels.pAxis), config);
+      Plotly.newPlot("plot-mxmy", [
+        closedLine(data.nominalMxMyEnvelope, data.labels.nominal, "rgba(15,127,153,0.38)", "dash"),
+        closedLine(data.mxMyEnvelope, data.labels.design, "#178a9b"),
+        loadTrace("mux", "muy", data.labels.loads)
+      ].filter(function (t) { return t.x.length > 0; }), layout2d(data.labels.mxMy, "Mx (kNm)", "My (kNm)"), config);
+
+      var traces3d = [];
+      if (data.nominalGrid) {
+        traces3d.push({ type: "surface", name: data.labels.nominal, x: data.nominalGrid.x, y: data.nominalGrid.y, z: data.nominalGrid.z, opacity: 0.18, showscale: false, contours: { x: { show: false }, y: { show: false }, z: { show: false } }, colorscale: [[0, "#8eb0ff"], [1, "#dbe6ff"]] });
+      }
+      if (data.designGrid) {
+        traces3d.push({ type: "surface", name: data.labels.design, x: data.designGrid.x, y: data.designGrid.y, z: data.designGrid.z, opacity: 0.68, showscale: false, contours: { x: { show: false }, y: { show: false }, z: { show: false } }, colorscale: [[0, "#b7791f"], [0.55, "#d69e2e"], [1, "#f6d76b"]] });
+      }
+      traces3d.push({
+        type: "scatter3d",
+        mode: "markers+text",
+        name: data.labels.loads,
+        x: data.loads.map(function (p) { return p.mux; }),
+        y: data.loads.map(function (p) { return p.muy; }),
+        z: data.loads.map(function (p) { return p.p; }),
+        text: data.loads.map(function (p) { return p.name; }),
+        textposition: "top center",
+        marker: { size: 7, color: data.loads.map(function (p) { return p.ok ? "#17894f" : "#c93636"; }), line: { color: "#ffffff", width: 2 } },
+        hovertemplate: "%{text}<br>P=%{z:.1f} kN<br>Mx=%{x:.1f} kNm<br>My=%{y:.1f} kNm<extra></extra>"
+      });
+      Plotly.newPlot("plot-3d", traces3d, {
+        title: { text: data.labels.pmm3d, x: 0.02, xanchor: "left" },
+        paper_bgcolor: "#ffffff",
+        margin: { l: 0, r: 0, t: 48, b: 0 },
+        font: font,
+        scene: {
+          bgcolor: "#ffffff",
+          aspectmode: "manual",
+          aspectratio: { x: 1, y: 1, z: 0.58 },
+          camera: { eye: { x: 1.45, y: -1.65, z: 1.05 }, projection: { type: "orthographic" } },
+          xaxis: { title: "Mx (kNm)", gridcolor: "rgba(16,40,58,0.14)", zerolinecolor: "rgba(183,112,56,0.45)", backgroundcolor: "#ffffff", showbackground: true },
+          yaxis: { title: "My (kNm)", gridcolor: "rgba(16,40,58,0.14)", zerolinecolor: "rgba(183,112,56,0.45)", backgroundcolor: "#ffffff", showbackground: true },
+          zaxis: { title: data.labels.pAxis, gridcolor: "rgba(16,40,58,0.14)", zerolinecolor: "rgba(183,112,56,0.45)", backgroundcolor: "#ffffff", showbackground: true }
+        }
+      }, config);
+
+      function mphiTrace(section, title) {
+        var key = section.key || {};
+        return Plotly.newPlot(title.id, [
+          { type: "scatter", mode: "lines", name: "M-φ", x: section.phi, y: section.moment, line: { color: "#0f7f99", width: 3 } },
+          { type: "scatter", mode: "markers", name: "Mu", x: [key.phiPeak], y: [key.mu], marker: { color: "#d93232", size: 10, symbol: "diamond" } }
+        ], layout2d(title.text, "φ (1/m)", "M (kNm)"), config);
+      }
+      mphiTrace(data.mphi0, { id: "plot-mphi0", text: data.labels.mphi0 });
+      mphiTrace(data.mphi90, { id: "plot-mphi90", text: data.labels.mphi90 });
+    })();
+  </script>
 </body>
 </html>`;
 }
@@ -8371,6 +8888,14 @@ async function exportWordReport(): Promise<void> {
   const html = buildReportHtml(snapshot, false);
   downloadDoc("pmmstudio_rapor.doc", html);
   setStatus(tx("statusReportExported"), "info");
+}
+
+async function exportInteractiveHtmlReport(): Promise<void> {
+  const snapshot = await buildReportSnapshot();
+  const html = buildInteractiveReportHtml(snapshot);
+  const fileBase = sanitizeProjectFilename(snapshot.meta.project || snapshot.meta.documentTitle || "pmmstudio-interaktif-rapor");
+  downloadText(`${fileBase}_interactive.html`, html, "text/html;charset=utf-8");
+  setStatus(tx("statusReportHtmlExported"), "info");
 }
 
 async function exportPdfReport(): Promise<void> {
