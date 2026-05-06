@@ -1028,22 +1028,51 @@ code {
 .load-sheet-table {
   min-width: 0;
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
+}
+
+.load-col-select {
+  width: 74px;
+}
+
+.load-col-section {
+  width: 92px;
+}
+
+.load-col-name {
+  width: 23%;
+}
+
+.load-col-pu,
+.load-col-mux,
+.load-col-muy {
+  width: calc((77% - 166px) / 3);
 }
 
 .load-sheet-table th,
 .load-sheet-table td {
   border-bottom: 1px solid var(--line);
-  padding: 4px 6px;
+  padding: 5px 6px;
   font-size: 12px;
   text-align: right;
   white-space: nowrap;
+  vertical-align: middle;
 }
 
 .load-sheet-table th:first-child,
 .load-sheet-table td:first-child {
-  width: 74px;
   text-align: center;
+}
+
+.load-sheet-table th:nth-child(2),
+.load-sheet-table td:nth-child(2) {
+  text-align: center;
+}
+
+.load-sheet-table th:nth-child(3),
+.load-sheet-table td:nth-child(3) {
+  text-align: left;
 }
 
 .load-select-cell {
@@ -1062,10 +1091,25 @@ code {
 .load-cell {
   width: 100%;
   min-width: 0;
+  height: 34px;
   border-radius: 8px;
   padding: 7px 8px;
   font-family: var(--font-mono);
   font-size: 12px;
+  box-sizing: border-box;
+  line-height: 1.2;
+}
+
+.load-section-select {
+  width: 100%;
+  min-width: 86px;
+  height: 34px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  box-sizing: border-box;
+  line-height: 1.2;
 }
 
 .load-cell.invalid {

@@ -94,6 +94,7 @@ interface WasmExports {
 
 interface LoadCase {
   name: string;
+  sectionId: number;
   pu: number;
   mux: number;
   muy: number;
@@ -126,6 +127,7 @@ type LoadSheetCol = "name" | "pu" | "mux" | "muy";
 
 interface LoadSheetRow {
   name: string;
+  sectionId: string;
   pu: string;
   mux: string;
   muy: string;
@@ -261,9 +263,24 @@ interface MphiReportSection {
   imageDataUrl: string;
 }
 
+interface ReportSectionSnapshot {
+  section: SectionDef;
+  input: AppInput;
+  loadCases: LoadCase[];
+  results: ResultRow[];
+  compliance: ComplianceCheck[];
+  pmmPointCount: number;
+  maxDcr: number;
+  minDcr: number;
+  failCount: number;
+  passCount: number;
+  infoCount: number;
+}
+
 interface ReportSnapshot {
   meta: ReportMeta;
   input: AppInput;
+  sectionReports: ReportSectionSnapshot[];
   loadCases: LoadCase[];
   results: ResultRow[];
   compliance: ComplianceCheck[];
@@ -919,9 +936,18 @@ app.innerHTML = `
 
           <div class="load-sheet-wrap">
             <table id="load-sheet-table" class="load-sheet-table" aria-label="Yük tablo girişi">
+              <colgroup>
+                <col class="load-col-select" />
+                <col class="load-col-section" />
+                <col class="load-col-name" />
+                <col class="load-col-pu" />
+                <col class="load-col-mux" />
+                <col class="load-col-muy" />
+              </colgroup>
               <thead>
                 <tr>
                   <th id="load-col-select" data-i18n="colLoadSelect">Seç</th>
+                  <th id="load-col-section" data-i18n="colLoadSectionEdit">Kesit</th>
                   <th id="load-col-name" data-i18n="colLoadNameEdit">Yük Adı</th>
                   <th id="load-col-pu" data-i18n="colLoadPuEdit">Pu (kN)</th>
                   <th id="load-col-mux" data-i18n="colLoadMuxEdit">Mux (kNm)</th>
@@ -934,7 +960,7 @@ app.innerHTML = `
 
           <div class="loads loads-secondary">
             <label>
-              <span data-i18n="labelLoadsTextarea">Yedek metin girişi (satır başına: </span><code data-i18n="labelLoadsFmtA">ad,Pu,Mux,Muy</code><span data-i18n="labelLoadsOr"> veya </span><code data-i18n="labelLoadsFmtB">Pu,Mux,Muy</code><span data-i18n="labelLoadsEnd">)</span>
+              <span data-i18n="labelLoadsTextarea">Yedek metin girişi (satır başına: </span><code data-i18n="labelLoadsFmtA">Kesit,ad,Pu,Mux,Muy</code><span data-i18n="labelLoadsOr"> veya </span><code data-i18n="labelLoadsFmtB">ad,Pu,Mux,Muy</code><span data-i18n="labelLoadsEnd">)</span>
               <textarea id="loads-text" rows="7">L1,1200,120,80
 L2,1800,200,140
 L3,650,90,45</textarea>
@@ -1034,6 +1060,7 @@ L3,650,90,45</textarea>
               <select id="projection">
                 <option value="p-mx" data-i18n="optProjPMx">P - Mx</option>
                 <option value="p-my" data-i18n="optProjPMy">P - My</option>
+                <option value="p-mx-my" data-i18n="optProjPMxMy">P - Mx/My</option>
                 <option value="mx-my" data-i18n="optProjMxMy">Mx - My</option>
               </select>
             </label>
@@ -1566,12 +1593,13 @@ const I18N = {
     headingSectionPreview: "Kesit ve Donatı Yerleşimi",
     labelLoads: "Yükler (satır başına: ",
     labelLoadsTextarea: "Yedek metin girişi (satır başına: ",
-    labelLoadsFmtA: "ad,Pu,Mux,Muy",
+    labelLoadsFmtA: "Kesit,ad,Pu,Mux,Muy",
     labelLoadsOr: " veya ",
-    labelLoadsFmtB: "Pu,Mux,Muy",
+    labelLoadsFmtB: "ad,Pu,Mux,Muy",
     labelLoadsEnd: ")",
-    labelCsvLoad: "CSV yük dosyası (opsiyonel; kolonlar: name,Pu,Mux,Muy)",
+    labelCsvLoad: "CSV yük dosyası (opsiyonel; kolonlar: name,Pu,Mux,Muy; kesit seçimi aktif kesitten gelir)",
     colLoadSelect: "Seç",
+    colLoadSectionEdit: "Kesit",
     colLoadNameEdit: "Yük Adı",
     colLoadPuEdit: "Pu (kN)",
     colLoadMuxEdit: "Mux (kNm)",
@@ -1643,6 +1671,7 @@ const I18N = {
     labelProjection: "Görünüm",
     optProjPMx: "P - Mx",
     optProjPMy: "P - My",
+    optProjPMxMy: "P - Mx/My",
     optProjMxMy: "Mx - My",
     heading3dTable: "3B Kesit Tablosu",
     labelSliceAngle: "Tablo açısı (°)",
@@ -1825,12 +1854,13 @@ const I18N = {
     headingSectionPreview: "Section & Rebar Layout",
     labelLoads: "Loads (per line: ",
     labelLoadsTextarea: "Fallback text input (per line: ",
-    labelLoadsFmtA: "name,Pu,Mux,Muy",
+    labelLoadsFmtA: "Section,name,Pu,Mux,Muy",
     labelLoadsOr: " or ",
-    labelLoadsFmtB: "Pu,Mux,Muy",
+    labelLoadsFmtB: "name,Pu,Mux,Muy",
     labelLoadsEnd: ")",
-    labelCsvLoad: "CSV load file (optional; columns: name,Pu,Mux,Muy)",
+    labelCsvLoad: "CSV load file (optional; columns: name,Pu,Mux,Muy; section is assigned from active section)",
     colLoadSelect: "Sel",
+    colLoadSectionEdit: "Section",
     colLoadNameEdit: "Load Name",
     colLoadPuEdit: "Pu (kN)",
     colLoadMuxEdit: "Mux (kNm)",
@@ -1902,6 +1932,7 @@ const I18N = {
     labelProjection: "View",
     optProjPMx: "P - Mx",
     optProjPMy: "P - My",
+    optProjPMxMy: "P - Mx/My",
     optProjMxMy: "Mx - My",
     heading3dTable: "3D Slice Table",
     labelSliceAngle: "Slice angle (°)",
@@ -1994,9 +2025,9 @@ type I18nKey = keyof typeof I18N.tr;
 const LOAD_SHEET_COLS: LoadSheetCol[] = ["name", "pu", "mux", "muy"];
 const NUMERIC_LOAD_COLS: Array<"pu" | "mux" | "muy"> = ["pu", "mux", "muy"];
 const DEFAULT_LOAD_SHEET: LoadSheetRow[] = [
-  { name: "L1", pu: "1200", mux: "120", muy: "80" },
-  { name: "L2", pu: "1800", mux: "200", muy: "140" },
-  { name: "L3", pu: "650", mux: "90", muy: "45" },
+  { name: "L1", sectionId: "1", pu: "1200", mux: "120", muy: "80" },
+  { name: "L2", sectionId: "1", pu: "1800", mux: "200", muy: "140" },
+  { name: "L3", sectionId: "1", pu: "650", mux: "90", muy: "45" },
 ];
 const PROJECT_FILE_VERSION = 2;
 const PROJECT_FILE_MAX_BYTES = Math.floor(1.5 * 1024 * 1024);
@@ -2264,6 +2295,8 @@ async function init(): Promise<void> {
   state.activeSectionIdx = 0;
   state.sectionFormExpanded = true;
   renderSectionStrip();
+  renderLoadSheetGrid();
+  syncLoadsTextareaFromSheet();
 
   bindShapeVisibility();
   bindExpectedStrengthVisibility();
@@ -2542,6 +2575,8 @@ function switchSection(idx: number): void {
   refs.sectionFormBody.classList.remove("hidden");
   loadSectionToForm(idx);
   renderSectionStrip();
+  renderLoadSheetGrid();
+  syncLoadsTextareaFromSheet();
 }
 
 function addSection(): void {
@@ -2554,6 +2589,8 @@ function addSection(): void {
   refs.sectionFormBody.classList.remove("hidden");
   loadSectionToForm(state.activeSectionIdx);
   renderSectionStrip();
+  renderLoadSheetGrid();
+  syncLoadsTextareaFromSheet();
 }
 
 function removeSection(idx: number): void {
@@ -2565,6 +2602,8 @@ function removeSection(idx: number): void {
   }
   loadSectionToForm(state.activeSectionIdx);
   renderSectionStrip();
+  renderLoadSheetGrid();
+  syncLoadsTextareaFromSheet();
 }
 
 function renderSectionStrip(): void {
@@ -3481,7 +3520,7 @@ function formatDateInputValue(date: Date): string {
 }
 
 function emptyLoadSheetRow(name = ""): LoadSheetRow {
-  return { name, pu: "", mux: "", muy: "" };
+  return { name, sectionId: String(state.sections[state.activeSectionIdx]?.id ?? state.sections[0]?.id ?? 1), pu: "", mux: "", muy: "" };
 }
 
 function normalizeNumberToken(raw: string): string {
@@ -3543,7 +3582,8 @@ function syncLoadsTextareaFromSheet(): void {
     .filter((row) => !isLoadRowBlank(row))
     .map((row, idx) => {
       const name = row.name.trim() || `L${idx + 1}`;
-      return `${name},${normalizeNumberToken(row.pu)},${normalizeNumberToken(row.mux)},${normalizeNumberToken(row.muy)}`;
+      const section = state.sections.find((s) => s.id === normalizeLoadSectionId(row.sectionId))?.name ?? "S1";
+      return `${section},${name},${normalizeNumberToken(row.pu)},${normalizeNumberToken(row.mux)},${normalizeNumberToken(row.muy)}`;
     });
   refs.loadsText.value = lines.join("\n");
 }
@@ -3557,17 +3597,23 @@ function parseLoadSheetFromTextarea(raw: string): LoadSheetRow[] {
   const parsed: LoadSheetRow[] = [];
   for (let i = 0; i < lines.length; i++) {
     const parts = splitLoadLine(lines[i]).map((part) => part.trim());
-    if (parts.length !== 3 && parts.length !== 4) {
+    if (parts.length !== 3 && parts.length !== 4 && parts.length !== 5) {
       throw new Error(state.lang === "en"
         ? `Invalid load row ${i + 1}: ${lines[i]}`
         : `Geçersiz yük satırı ${i + 1}: ${lines[i]}`);
     }
-    const hasName = parts.length === 4;
+    const hasSection = parts.length === 5;
+    const hasName = parts.length >= 4;
+    const sectionName = hasSection ? parts[0] : "";
+    const sectionId = hasSection
+      ? String(state.sections.find((section) => section.name.toLowerCase() === sectionName.toLowerCase())?.id ?? normalizeLoadSectionId(sectionName.replace(/^S/i, "")))
+      : String(state.sections[state.activeSectionIdx]?.id ?? state.sections[0]?.id ?? 1);
     parsed.push({
-      name: hasName ? (parts[0] || `L${i + 1}`) : `L${i + 1}`,
-      pu: normalizeNumberToken(parts[hasName ? 1 : 0]),
-      mux: normalizeNumberToken(parts[hasName ? 2 : 1]),
-      muy: normalizeNumberToken(parts[hasName ? 3 : 2]),
+      sectionId,
+      name: hasName ? (parts[hasSection ? 1 : 0] || `L${i + 1}`) : `L${i + 1}`,
+      pu: normalizeNumberToken(parts[hasSection ? 2 : hasName ? 1 : 0]),
+      mux: normalizeNumberToken(parts[hasSection ? 3 : hasName ? 2 : 1]),
+      muy: normalizeNumberToken(parts[hasSection ? 4 : hasName ? 3 : 2]),
     });
   }
   assertLoadSheetRowLimit(parsed);
@@ -3661,11 +3707,30 @@ function refreshLoadSheetValidation(writeStatus: boolean): number {
   return issues.length;
 }
 
+function normalizeLoadSectionId(raw: string | number | undefined): number {
+  const parsed = Number(String(raw ?? "").trim());
+  if (Number.isFinite(parsed) && state.sections.some((section) => section.id === parsed)) {
+    return parsed;
+  }
+  return state.sections[state.activeSectionIdx]?.id ?? state.sections[0]?.id ?? 1;
+}
+
+function loadSectionOptionsHtml(selectedId: number): string {
+  return state.sections
+    .map((section) => {
+      const selected = section.id === selectedId ? " selected" : "";
+      const label = sectionSelectLabel(section.name);
+      return `<option value="${section.id}"${selected}>${escapeHtml(label)}</option>`;
+    })
+    .join("");
+}
+
 function renderLoadSheetGrid(): void {
   const issueSet = new Set(state.loadIssues.map((issue) => getLoadCellIssueKey(issue.row, issue.col)));
   const bodyHtml = state.loadSheet
     .map((row, index) => {
       const checked = state.selectedLoadRows.has(index) ? "checked" : "";
+      const selectedSectionId = normalizeLoadSectionId(row.sectionId);
       const makeCell = (col: LoadSheetCol): string => {
         const value = row[col] ?? "";
         const invalidClass = issueSet.has(getLoadCellIssueKey(index, col)) ? " invalid" : "";
@@ -3686,6 +3751,11 @@ function renderLoadSheetGrid(): void {
         <td class="load-select-cell">
           <input type="checkbox" class="load-row-select" data-row="${index}" aria-label="${escapeHtml(loadSheetRowSelectLabel(index))}" ${checked} />
           <span class="load-row-id" id="load-row-${index + 1}">${index + 1}</span>
+        </td>
+        <td>
+          <select class="load-section-select" data-row="${index}" aria-label="${escapeHtml(sectionSelectLabel(row.name.trim() || `L${index + 1}`))}">
+            ${loadSectionOptionsHtml(selectedSectionId)}
+          </select>
         </td>
         ${makeCell("name")}
         ${makeCell("pu")}
@@ -3744,6 +3814,13 @@ function onLoadGridFocusIn(event: FocusEvent): void {
 
 function onLoadGridChange(event: Event): void {
   const target = event.target as HTMLElement | null;
+  if (target instanceof HTMLSelectElement && target.classList.contains("load-section-select")) {
+    const row = Number(target.dataset.row);
+    if (!Number.isFinite(row) || row < 0 || row >= state.loadSheet.length) return;
+    state.loadSheet[row].sectionId = String(normalizeLoadSectionId(target.value));
+    syncLoadsTextareaFromSheet();
+    return;
+  }
   if (!(target instanceof HTMLInputElement)) return;
   if (target.classList.contains("load-row-select")) {
     const row = Number(target.dataset.row);
@@ -3922,6 +3999,7 @@ async function importCsvToLoadSheet(): Promise<void> {
     ...state.loadSheet,
     ...parsed.map((row) => ({
       name: row.name,
+      sectionId: String(row.sectionId || state.sections[state.activeSectionIdx]?.id || 1),
       pu: toCsvNumber(row.pu),
       mux: toCsvNumber(row.mux),
       muy: toCsvNumber(row.muy),
@@ -3931,6 +4009,7 @@ async function importCsvToLoadSheet(): Promise<void> {
   for (const row of parsed) {
     state.loadSheet.push({
       name: row.name,
+      sectionId: String(row.sectionId || state.sections[state.activeSectionIdx]?.id || 1),
       pu: toCsvNumber(row.pu),
       mux: toCsvNumber(row.mux),
       muy: toCsvNumber(row.muy),
@@ -4033,6 +4112,7 @@ function validateLoadSheetRows(rows: LoadSheetRow[]): { loads: LoadCase[]; issue
     if (!issues.some((issue) => issue.row === i)) {
       loads.push({
         name,
+        sectionId: normalizeLoadSectionId(row.sectionId),
         pu: numValues.pu,
         mux: numValues.mux,
         muy: numValues.muy,
@@ -4064,8 +4144,12 @@ async function runAnalysis(): Promise<void> {
   syncSectionFormToState();
   setStatus(tx("statusPmmCalculating"), "info");
 
-  const loads = collectLoadsFromSheet();
   const sec = state.sections[state.activeSectionIdx];
+  const allLoads = collectLoadsFromSheet();
+  const loads = allLoads.filter((load) => load.sectionId === sec.id);
+  if (loads.length === 0) {
+    throw new Error(state.lang === "en" ? `No load case is assigned to ${sec.name}.` : `${sec.name} kesitine atanmış yük yok.`);
+  }
   const input = collectInputForSection(sec, loads);
   state.lastInput = input;
   refs.rhoDisplay.textContent = reinforcementRatioText(input);
@@ -5383,6 +5467,279 @@ function prepareCanvasContext(canvas: HTMLCanvasElement): { ctx: CanvasRendering
   return { ctx, w, h };
 }
 
+interface EnvelopePoint {
+  x: number;
+  y: number;
+}
+
+function envelopeCross(o: EnvelopePoint, a: EnvelopePoint, b: EnvelopePoint): number {
+  return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+}
+
+function uniqueEnvelopePoints(points: EnvelopePoint[]): EnvelopePoint[] {
+  const seen = new Set<string>();
+  const out: EnvelopePoint[] = [];
+  for (const point of points) {
+    if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) continue;
+    const key = `${roundDisplayValue(point.x, 6)}:${roundDisplayValue(point.y, 6)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(point);
+  }
+  return out.sort((a, b) => (a.x === b.x ? a.y - b.y : a.x - b.x));
+}
+
+function buildConvexEnvelope(points: EnvelopePoint[]): EnvelopePoint[] {
+  const sorted = uniqueEnvelopePoints(points);
+  if (sorted.length <= 2) return sorted;
+  const lower: EnvelopePoint[] = [];
+  for (const point of sorted) {
+    while (lower.length >= 2 && envelopeCross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) {
+      lower.pop();
+    }
+    lower.push(point);
+  }
+  const upper: EnvelopePoint[] = [];
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const point = sorted[i];
+    while (upper.length >= 2 && envelopeCross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) {
+      upper.pop();
+    }
+    upper.push(point);
+  }
+  lower.pop();
+  upper.pop();
+  return [...lower, ...upper];
+}
+
+function buildProjectedEnvelope(surface: PmmPoint[], projection: "p-mx" | "p-my"): EnvelopePoint[] {
+  const pSignFactor = readCurrentPSignFactor();
+  return buildConvexEnvelope(
+    surface.map((point) => ({
+      x: projection === "p-mx" ? point.mx : point.my,
+      y: point.p * pSignFactor,
+    }))
+  );
+}
+
+function renderAxisPmmPlot(ctx: CanvasRenderingContext2D, w: number, h: number, pal: PlotPalette, results: ResultRow[], projection: "p-mx" | "p-my"): void {
+  const isMx = projection === "p-mx";
+  const designCurve = buildProjectedEnvelope(state.surface, projection);
+  if (designCurve.length < 2) return;
+  const nominalCurve = state.showNominalSurface ? buildProjectedEnvelope(state.nominalSurface, projection) : [];
+  const pSignFactor = readCurrentPSignFactor();
+  const loads = results.map((r) => ({
+    x: isMx ? r.mux : r.muy,
+    y: r.pu * pSignFactor,
+    ok: r.ok,
+  }));
+  const allPoints = [
+    ...designCurve,
+    ...nominalCurve,
+    ...loads,
+  ];
+  const xs = allPoints.map((p) => p.x);
+  const ys = allPoints.map((p) => p.y);
+  const xMin = Math.min(...xs);
+  const xMax = Math.max(...xs);
+  const yMin = Math.min(...ys);
+  const yMax = Math.max(...ys);
+  const padX = (xMax - xMin || 1) * 0.08;
+  const padY = (yMax - yMin || 1) * 0.08;
+  const xTicks = buildNiceTicks(xMin - padX, xMax + padX, 9);
+  const yTicks = buildNiceTicks(yMin - padY, yMax + padY, 7);
+  const bx0 = xTicks[0];
+  const bx1 = xTicks[xTicks.length - 1];
+  const by0 = yTicks[0];
+  const by1 = yTicks[yTicks.length - 1];
+  const plotLeft = 76;
+  const plotRight = w - 36;
+  const plotTop = 36;
+  const plotBottom = h - 58;
+  const plotWidth = Math.max(10, plotRight - plotLeft);
+  const plotHeight = Math.max(10, plotBottom - plotTop);
+  const sx = (v: number): number => ((v - bx0) / (bx1 - bx0)) * plotWidth + plotLeft;
+  const sy = (v: number): number => plotBottom - (((v - by0) / (by1 - by0)) * plotHeight);
+
+  drawGrid(ctx, xTicks, yTicks, sx, sy, plotLeft, plotTop, plotRight, plotBottom, pal);
+  const drawClosedCurve = (points: EnvelopePoint[], color: string, width: number, dash: number[] = []): void => {
+    if (points.length < 2) return;
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.setLineDash(dash);
+    ctx.beginPath();
+    points.forEach((point, index) => {
+      if (index === 0) ctx.moveTo(sx(point.x), sy(point.y));
+      else ctx.lineTo(sx(point.x), sy(point.y));
+    });
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  };
+  const curveColor = isMx ? "#e8aa00" : "#d93232";
+  if (nominalCurve.length > 1) {
+    drawClosedCurve(nominalCurve, "rgba(15, 127, 153, 0.36)", 1.6, [7, 5]);
+  }
+  drawClosedCurve(designCurve, curveColor, 3.0);
+
+  for (const point of loads) {
+    ctx.fillStyle = point.ok ? pal.loadOk : pal.loadNg;
+    ctx.beginPath();
+    ctx.arc(sx(point.x), sy(point.y), 4.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.strokeStyle = pal.border;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(plotLeft, plotTop, plotWidth, plotHeight);
+  ctx.fillStyle = pal.label;
+  ctx.font = "14px 'IBM Plex Sans'";
+  const [xLabel, yLabel] = labelsForProjection(projection);
+  ctx.textAlign = "right";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(xLabel, plotRight, h - 12);
+  ctx.save();
+  ctx.translate(18, (plotTop + plotBottom) * 0.5);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.fillText(yLabel, 0, 0);
+  ctx.restore();
+}
+
+function renderCombinedPmmPlot(ctx: CanvasRenderingContext2D, w: number, h: number, pal: PlotPalette, results: ResultRow[]): void {
+  const mxCurve = buildProjectedEnvelope(state.surface, "p-mx");
+  const myCurve = buildProjectedEnvelope(state.surface, "p-my");
+  if (mxCurve.length < 2 || myCurve.length < 2) return;
+  const nominalMxCurve = state.showNominalSurface ? buildProjectedEnvelope(state.nominalSurface, "p-mx") : [];
+  const nominalMyCurve = state.showNominalSurface ? buildProjectedEnvelope(state.nominalSurface, "p-my") : [];
+  const pSignFactor = readCurrentPSignFactor();
+  const muxLoads = results.map((r) => ({ x: r.mux, y: r.pu * pSignFactor, ok: r.ok }));
+  const muyLoads = results.map((r) => ({ x: r.muy, y: r.pu * pSignFactor, ok: r.ok }));
+
+  const allPoints = [
+    ...mxCurve,
+    ...myCurve,
+    ...nominalMxCurve,
+    ...nominalMyCurve,
+    ...muxLoads,
+    ...muyLoads,
+  ];
+  const xs = allPoints.map((p) => p.x);
+  const ys = allPoints.map((p) => p.y);
+  const xMin = Math.min(...xs);
+  const xMax = Math.max(...xs);
+  const yMin = Math.min(...ys);
+  const yMax = Math.max(...ys);
+  const padX = (xMax - xMin || 1) * 0.08;
+  const padY = (yMax - yMin || 1) * 0.08;
+  const xTicks = buildNiceTicks(xMin - padX, xMax + padX, 9);
+  const yTicks = buildNiceTicks(yMin - padY, yMax + padY, 7);
+
+  const bx0 = xTicks[0];
+  const bx1 = xTicks[xTicks.length - 1];
+  const by0 = yTicks[0];
+  const by1 = yTicks[yTicks.length - 1];
+  const plotLeft = 76;
+  const plotRight = w - 36;
+  const plotTop = 36;
+  const plotBottom = h - 66;
+  const plotWidth = Math.max(10, plotRight - plotLeft);
+  const plotHeight = Math.max(10, plotBottom - plotTop);
+  const sx = (v: number): number => ((v - bx0) / (bx1 - bx0)) * plotWidth + plotLeft;
+  const sy = (v: number): number => plotBottom - (((v - by0) / (by1 - by0)) * plotHeight);
+
+  drawGrid(ctx, xTicks, yTicks, sx, sy, plotLeft, plotTop, plotRight, plotBottom, pal);
+
+  const drawCurve = (points: EnvelopePoint[], color: string, width: number, dash: number[] = []): void => {
+    if (points.length < 2) return;
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.setLineDash(dash);
+    ctx.beginPath();
+    points.forEach((point, index) => {
+      if (index === 0) ctx.moveTo(sx(point.x), sy(point.y));
+      else ctx.lineTo(sx(point.x), sy(point.y));
+    });
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  };
+
+  const mxColor = "#e8aa00";
+  const myColor = "#d93232";
+  if (nominalMxCurve.length > 1) {
+    drawCurve(nominalMxCurve, "rgba(232, 170, 0, 0.45)", 1.7, [7, 5]);
+  }
+  if (nominalMyCurve.length > 1) {
+    drawCurve(nominalMyCurve, "rgba(217, 50, 50, 0.45)", 1.7, [7, 5]);
+  }
+  drawCurve(myCurve, myColor, 3.4);
+  drawCurve(mxCurve, mxColor, 3.0);
+
+  for (const point of muxLoads) {
+    ctx.fillStyle = point.ok ? mxColor : pal.loadNg;
+    ctx.strokeStyle = "rgba(23, 48, 63, 0.65)";
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.arc(sx(point.x), sy(point.y), 4.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  for (const point of muyLoads) {
+    const x = sx(point.x);
+    const y = sy(point.y);
+    ctx.fillStyle = point.ok ? myColor : pal.loadNg;
+    ctx.strokeStyle = "rgba(23, 48, 63, 0.65)";
+    ctx.lineWidth = 0.8;
+    ctx.fillRect(x - 4, y - 4, 8, 8);
+    ctx.strokeRect(x - 4, y - 4, 8, 8);
+  }
+
+  ctx.strokeStyle = pal.border;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(plotLeft, plotTop, plotWidth, plotHeight);
+
+  ctx.fillStyle = pal.label;
+  ctx.font = "14px 'IBM Plex Sans'";
+  ctx.textAlign = "right";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText("M (kNm)", plotRight, h - 14);
+  ctx.save();
+  ctx.translate(18, (plotTop + plotBottom) * 0.5);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.fillText(labelsForProjection("p-mx-my")[1], 0, 0);
+  ctx.restore();
+
+  const legendY = h - 34;
+  const legendItems = [
+    { label: "My zarfı", color: myColor, square: false },
+    { label: "Mx zarfı", color: mxColor, square: false },
+    { label: "Muy yükleri", color: myColor, square: true },
+    { label: "Mux yükleri", color: mxColor, square: false },
+  ];
+  let legendX = plotLeft + Math.max(0, (plotWidth - 420) * 0.5);
+  ctx.font = "12px 'IBM Plex Sans'";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  for (const item of legendItems) {
+    ctx.fillStyle = item.color;
+    if (item.square) ctx.fillRect(legendX, legendY - 4, 8, 8);
+    else {
+      ctx.beginPath();
+      ctx.arc(legendX + 4, legendY, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = pal.label;
+    ctx.fillText(item.label, legendX + 14, legendY);
+    legendX += 102;
+  }
+}
+
 function renderPlot(surface: PmmPoint[], results: ResultRow[]): void {
   const prepared = prepareCanvasContext(refs.plot);
   if (!prepared) return;
@@ -5395,6 +5752,14 @@ function renderPlot(surface: PmmPoint[], results: ResultRow[]): void {
   if (surface.length === 0) return;
 
   const projection = refs.projection.value;
+  if (projection === "p-mx-my") {
+    renderCombinedPmmPlot(ctx, w, h, pal, results);
+    return;
+  }
+  if (projection === "p-mx" || projection === "p-my") {
+    renderAxisPmmPlot(ctx, w, h, pal, results, projection);
+    return;
+  }
   const pSignFactor = readCurrentPSignFactor();
   const showNominalSurface = state.showNominalSurface && state.nominalSurface.length > 0;
   const series = surface.map((p) => pickProjection(p, projection, pSignFactor));
@@ -6003,6 +6368,7 @@ function labelsForProjection(projection: string): [string, string] {
     ? (state.lang === "en" ? "P (kN, C-)" : "P (kN, B-)")
     : (state.lang === "en" ? "P (kN, C+)" : "P (kN, B+)");
   if (projection === "p-my") return ["My (kNm)", pLabel];
+  if (projection === "p-mx-my") return ["M (kNm)", pLabel];
   if (projection === "mx-my") return ["Mx (kNm)", "My (kNm)"];
   return ["Mx (kNm)", pLabel];
 }
@@ -6032,6 +6398,7 @@ async function parseLoadsCsvFile(file: File): Promise<LoadCase[]> {
     if (parts.length <= Math.max(idxPu, idxMx, idxMy)) continue;
     out.push({
       name: idxName >= 0 ? parts[idxName] || `F${i}` : `F${i}`,
+      sectionId: state.sections[state.activeSectionIdx]?.id ?? state.sections[0]?.id ?? 1,
       pu: n(parts[idxPu]),
       mux: n(parts[idxMx]),
       muy: n(parts[idxMy]),
@@ -6130,11 +6497,15 @@ function toAxisSeriesRows(rows: PmmPoint[], moment: "mx" | "my"): AxisSeriesRow[
 }
 
 function buildAxisExportData(): AxisExportData | null {
-  if (state.surface.length === 0) return null;
+  return buildAxisExportDataFromSurface(state.surface);
+}
+
+function buildAxisExportDataFromSurface(surface: PmmPoint[]): AxisExportData | null {
+  if (surface.length === 0) return null;
   const angleCount = state.angleCount;
   const depthCount = state.depthCount;
   const shellPointCount = angleCount * depthCount;
-  if (shellPointCount <= 0 || state.surface.length < shellPointCount || angleCount <= 0 || depthCount <= 0) return null;
+  if (shellPointCount <= 0 || surface.length < shellPointCount || angleCount <= 0 || depthCount <= 0) return null;
   const pSignFactor = readCurrentPSignFactor();
 
   const myAngleIndex = findAngleIndex(0, angleCount);
@@ -6142,8 +6513,8 @@ function buildAxisExportData(): AxisExportData | null {
   const myAngleDeg = (myAngleIndex / angleCount) * 360;
   const mxAngleDeg = (mxAngleIndex / angleCount) * 360;
 
-  const myRows = collectAngleSliceRows(state.surface, myAngleIndex, depthCount, pSignFactor);
-  const mxRows = collectAngleSliceRows(state.surface, mxAngleIndex, depthCount, pSignFactor);
+  const myRows = collectAngleSliceRows(surface, myAngleIndex, depthCount, pSignFactor);
+  const mxRows = collectAngleSliceRows(surface, mxAngleIndex, depthCount, pSignFactor);
 
   return {
     mx: toAxisSeriesRows(mxRows, "mx"),
@@ -7061,6 +7432,7 @@ function parseProjectFile(text: string): ParsedProjectFile {
     .filter((row): row is Record<string, unknown> => isRecord(row))
     .map((row) => ({
       name: readRecordString(row, "name"),
+      sectionId: readRecordString(row, "sectionId", "1"),
       pu: readRecordString(row, "pu"),
       mux: readRecordString(row, "mux"),
       muy: readRecordString(row, "muy"),
@@ -7496,6 +7868,53 @@ async function createMcImageForReport(data: McData, title: string): Promise<stri
   }
 }
 
+function evaluateLoadsForReport(wasm: WasmExports, loads: LoadCase[]): ResultRow[] {
+  const results: ResultRow[] = [];
+  for (const load of loads) {
+    wasm.evaluateLoad(load.pu, load.mux, load.muy);
+    const dcr = wasm.getLastDcr();
+    results.push({
+      ...load,
+      pcap: wasm.getLastPcap(),
+      mxcap: wasm.getLastMxcap(),
+      mycap: wasm.getLastMycap(),
+      scale: wasm.getLastScale(),
+      dcr,
+      ok: wasm.getLastOk() === 1,
+    });
+  }
+  return results;
+}
+
+function buildSectionReportSnapshots(wasm: WasmExports, allLoads: LoadCase[]): ReportSectionSnapshot[] {
+  const reports: ReportSectionSnapshot[] = [];
+  for (const section of state.sections) {
+    const sectionLoads = allLoads.filter((load) => load.sectionId === section.id);
+    const input = collectInputForSection(section, sectionLoads);
+    const cfgOk = configureWasm(wasm, input);
+    if (cfgOk !== 1) {
+      throw new Error(state.lang === "en" ? `Cannot configure section ${section.name} for report.` : `Rapor için ${section.name} kesiti konfigüre edilemedi.`);
+    }
+    const results = evaluateLoadsForReport(wasm, sectionLoads);
+    const compliance = evaluateCompliance(input);
+    const dcrValues = results.map((row) => row.dcr).filter((value) => Number.isFinite(value));
+    reports.push({
+      section,
+      input,
+      loadCases: sectionLoads,
+      results,
+      compliance,
+      pmmPointCount: input.nAngle * input.nDepth + 2,
+      maxDcr: dcrValues.length > 0 ? Math.max(...dcrValues) : 0,
+      minDcr: dcrValues.length > 0 ? Math.min(...dcrValues) : 0,
+      failCount: compliance.filter((check) => check.status === "fail").length,
+      passCount: compliance.filter((check) => check.status === "pass").length,
+      infoCount: compliance.filter((check) => check.status === "info").length,
+    });
+  }
+  return reports;
+}
+
 function reportInputRows(input: AppInput): Array<[string, string]> {
   return [
     [reportText("Kod modu", "Code mode"), input.codeMode],
@@ -7544,6 +7963,8 @@ async function buildReportSnapshot(): Promise<ReportSnapshot> {
   if (!wasm) throw new Error(tx("statusWasmLoading"));
 
   const input = state.lastInput;
+  const allLoads = collectLoadsFromSheet();
+  const sectionReports = buildSectionReportSnapshots(wasm, allLoads);
   const cfgOk = configureWasm(wasm, input);
   if (cfgOk !== 1) {
     throw new Error(state.lang === "en" ? "Cannot configure section for report." : "Rapor için kesit konfigürasyonu başarısız.");
@@ -7584,6 +8005,7 @@ async function buildReportSnapshot(): Promise<ReportSnapshot> {
   return {
     meta,
     input,
+    sectionReports,
     loadCases: [...input.loads],
     results: [...state.results],
     compliance: [...state.compliance],
@@ -7648,19 +8070,36 @@ function renderReportGoverningSummary(snapshot: ReportSnapshot): string {
   `;
 }
 
-function buildReportHtml(snapshot: ReportSnapshot, printMode: boolean): string {
-  const generatedAt = new Date().toLocaleString(currentLocale());
-  const reportLang = state.lang === "en" ? "en" : "tr";
-  const sections = snapshot.meta.sections;
-  const docTitle = snapshot.meta.documentTitle || reportText("Kolon PMM Teknik Raporu", "Column PMM Technical Report");
-  const safeLogo = snapshot.meta.logo?.dataUrl ?? "";
-  const summaryRows = reportInputRows(snapshot.input)
+function renderSectionReportSummary(sectionReport: ReportSectionSnapshot): string {
+  const summaryRows = reportInputRows(sectionReport.input)
     .map(([k, v]) => `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(v)}</td></tr>`)
     .join("");
-  const loadRows = snapshot.loadCases
+  const governing = findGoverningResult(sectionReport.results);
+  const governingText = governing
+    ? `${escapeHtml(governing.name)} | DCR=${fmt(governing.dcr, 4)} | ${governing.ok ? "UYGUN" : "UYGUN DEĞİL"}`
+    : reportText("Bu kesite atanmış yük yok.", "No load case assigned to this section.");
+  return `
+    <section class="section section-sub">
+      <h3>${escapeHtml(sectionReport.section.name)} - ${escapeHtml(reportText("Kesit Özeti", "Section Summary"))}</h3>
+      <div class="summary-grid">
+        <div class="summary-chip"><span class="k">${escapeHtml(reportText("Atanmış yük", "Assigned loads"))}</span><span class="v">${fmt(sectionReport.loadCases.length, 0)}</span></div>
+        <div class="summary-chip"><span class="k">${escapeHtml(reportText("PMM Noktası", "PMM Points"))}</span><span class="v">${fmt(sectionReport.pmmPointCount, 0)}</span></div>
+        <div class="summary-chip"><span class="k">DCR (min / max)</span><span class="v">${fmt(sectionReport.minDcr, 4)} / ${fmt(sectionReport.maxDcr, 4)}</span></div>
+        <div class="summary-chip"><span class="k">${escapeHtml(reportText("Belirleyici", "Governing"))}</span><span class="v">${governingText}</span></div>
+      </div>
+      <table class="kv-table"><tbody>${summaryRows}</tbody></table>
+    </section>
+  `;
+}
+
+function renderSectionLoadInputRows(loadCases: LoadCase[]): string {
+  return loadCases
     .map((row) => `<tr><td>${escapeHtml(row.name)}</td><td>${fmt(row.pu, 2)}</td><td>${fmt(row.mux, 2)}</td><td>${fmt(row.muy, 2)}</td></tr>`)
     .join("");
-  const resultRows = snapshot.results
+}
+
+function renderSectionResultRows(results: ResultRow[]): string {
+  return results
     .map((row) => `<tr>
       <td>${escapeHtml(row.name)}</td>
       <td>${fmt(row.pu, 2)}</td>
@@ -7673,6 +8112,17 @@ function buildReportHtml(snapshot: ReportSnapshot, printMode: boolean): string {
       <td>${fmt(row.dcr, 4)}</td>
       <td>${row.ok ? "UYGUN" : "UYGUN DEĞİL"}</td>
     </tr>`)
+    .join("");
+}
+
+function buildReportHtml(snapshot: ReportSnapshot, printMode: boolean): string {
+  const generatedAt = new Date().toLocaleString(currentLocale());
+  const reportLang = state.lang === "en" ? "en" : "tr";
+  const sections = snapshot.meta.sections;
+  const docTitle = snapshot.meta.documentTitle || reportText("Kolon PMM Teknik Raporu", "Column PMM Technical Report");
+  const safeLogo = snapshot.meta.logo?.dataUrl ?? "";
+  const summaryRows = reportInputRows(snapshot.input)
+    .map(([k, v]) => `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(v)}</td></tr>`)
     .join("");
   const complianceRows = snapshot.compliance
     .map((row) => `<tr>
@@ -7738,6 +8188,7 @@ function buildReportHtml(snapshot: ReportSnapshot, printMode: boolean): string {
       </div>
       ${renderReportGoverningSummary(snapshot)}
       <table class="kv-table"><tbody>${summaryRows}</tbody></table>
+      ${snapshot.sectionReports.map(renderSectionReportSummary).join("")}
     </section>`);
   }
 
@@ -7757,10 +8208,13 @@ function buildReportHtml(snapshot: ReportSnapshot, printMode: boolean): string {
     sectionBlocks.push(`
     <section class="section">
       <h2>Yük Girdileri</h2>
-      <table>
-        <thead><tr><th>Yük Adı</th><th>Pu (kN)</th><th>Mux (kNm)</th><th>Muy (kNm)</th></tr></thead>
-        <tbody>${loadRows || `<tr><td colspan="4">-</td></tr>`}</tbody>
-      </table>
+      ${snapshot.sectionReports.map((sectionReport) => `
+        <h3>${escapeHtml(sectionReport.section.name)}</h3>
+        <table>
+          <thead><tr><th>Yük Adı</th><th>Pu (kN)</th><th>Mux (kNm)</th><th>Muy (kNm)</th></tr></thead>
+          <tbody>${renderSectionLoadInputRows(sectionReport.loadCases) || `<tr><td colspan="4">-</td></tr>`}</tbody>
+        </table>
+      `).join("")}
     </section>`);
   }
 
@@ -7768,14 +8222,17 @@ function buildReportHtml(snapshot: ReportSnapshot, printMode: boolean): string {
     sectionBlocks.push(`
     <section class="section">
       <h2>Yük Sonuçları</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Yük</th><th>Pu</th><th>Mux</th><th>Muy</th><th>Pcap</th><th>Mxcap</th><th>Mycap</th><th>Scale</th><th>DCR</th><th>Durum</th>
-          </tr>
-        </thead>
-        <tbody>${resultRows || `<tr><td colspan="10">-</td></tr>`}</tbody>
-      </table>
+      ${snapshot.sectionReports.map((sectionReport) => `
+        <h3>${escapeHtml(sectionReport.section.name)}</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Yük</th><th>Pu</th><th>Mux</th><th>Muy</th><th>Pcap</th><th>Mxcap</th><th>Mycap</th><th>Scale</th><th>DCR</th><th>Durum</th>
+            </tr>
+          </thead>
+          <tbody>${renderSectionResultRows(sectionReport.results) || `<tr><td colspan="10">-</td></tr>`}</tbody>
+        </table>
+      `).join("")}
     </section>`);
   }
 
